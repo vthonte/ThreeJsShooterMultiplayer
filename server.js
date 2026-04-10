@@ -79,6 +79,15 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("playerDied", ({ id }) => {
+    const room = socket.room;
+    if (!room) return;
+
+    delete rooms[room][socket.id];
+
+    socket.to(room).emit("playerDisconnected", socket.id);
+  });
+
   socket.on("disconnect", () => {
     const room = socket.room;
     if (!room || !rooms[room]) return;
