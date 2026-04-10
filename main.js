@@ -260,6 +260,27 @@ function animate() {
     isOnGround = true;
   }
 
+  enemies.forEach((enemy) => {
+    const dir = new THREE.Vector3()
+      .subVectors(camera.position, enemy.position)
+      .normalize();
+
+    const distance = enemy.position.distanceTo(camera.position);
+
+    // move
+    enemy.position.add(dir.multiplyScalar(enemy.userData.speed));
+
+    // attack
+    if (distance < 2) {
+      if (enemy.userData.attackCooldown <= 0) {
+        damagePlayer(5); // 👈 THIS WAS MISSING
+        enemy.userData.attackCooldown = 1;
+      }
+    }
+
+    enemy.userData.attackCooldown -= 0.016; // approx frame time
+  });
+
   requestAnimationFrame(animate);
 
   if (move.forward) controls.moveForward(0.1);
@@ -276,6 +297,12 @@ function damagePlayer(amount) {
   if (isGameOver) return;
 
   playerHealth -= amount;
+
+  const healthBar = document.getElementById("health-bar");
+  const healthText = document.getElementById("health-text");
+
+  if (healthBar) healthBar.style.width = playerHealth + "%";
+  if (healthText) healthText.innerText = playerHealth;
 
   if (playerHealth <= 0) gameOver();
 }

@@ -12,7 +12,7 @@ export function createWorld(scene, THREE) {
   scene.add(floor);
 
   // buildings
-  for (let i = 0; i < 1; i++) {
+  for (let i = 0; i < 50; i++) {
     const geo = new THREE.BoxGeometry(
       Math.random() * 3 + 1,
       Math.random() * 10 + 2,
