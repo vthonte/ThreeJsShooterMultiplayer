@@ -10,7 +10,7 @@ const roomId = localStorage.getItem("roomId") || "default";
 const singlePlayer = constants.IS_SINGLE_PLAYER;
 
 const socket = io(
-  `${window.location.protocol}://${window.location.hostname}:${constants.SERVER_PORT}`,
+  `http://${window.location.hostname}:${constants.SERVER_PORT}`,
 );
 
 // const socket = io();

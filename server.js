@@ -9,11 +9,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Static frontend
-app.use(express.static(path.join(path.resolve(), "public")));
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(path.resolve(), "public/index.html"));
-});
+// app.use(express.static(path.join(path.resolve(), "public")));
 
 const io = new Server(server, {
   cors: { origin: "*" },
@@ -93,6 +89,6 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(constants.SERVER_PORT, () => {
+server.listen(constants.SERVER_PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${constants.SERVER_PORT}`);
 });

@@ -26,9 +26,7 @@
         window.location.href = "game.html";
       }
 
-      const socket = io(
-        `${window.location.protocol}://${window.location.hostname}:${constants.SERVER_PORT}`,
-      );
+      const socket = io(`http://${window.location.hostname}:3001`);
 
       function loadRooms() {
         socket.emit("getRooms");
