@@ -1,15 +1,10 @@
-// server.js
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
-import path from "path";
 import constants from "./constants.js";
 
 const app = express();
 const server = http.createServer(app);
-
-// Static frontend
-// app.use(express.static(path.join(path.resolve(), "public")));
 
 const io = new Server(server, {
   cors: { origin: "*" },
@@ -21,117 +16,138 @@ function randomColor() {
   return Math.floor(Math.random() * 0xffffff);
 }
 
-io.on("connection", (socket) => {
-  console.log("Player connected:", socket.id);
+function findSocketByPlayerId(playerId) {
+  for (let s of io.sockets.sockets.values()) {
+    if (s.playerId === playerId) return s;
+  }
+  return null;
+}
 
-  socket.on("join", ({ name, room }) => {
+io.on("connection", (socket) => {
+  const queryPlayerId = socket.handshake.query.playerId;
+
+  socket.on("join", ({ name, room, playerId }) => {
     socket.join(room);
 
     if (!rooms[room]) rooms[room] = {};
 
-    rooms[room][socket.id] = {
-      x: 0,
-      y: 2,
-      z: 0,
-      name,
-      color: randomColor(),
-      kills: 0, // ✅ NEW
-      deaths: 0, // ✅ NEW
-      health: 100, // ✅ NEW (server authority)
-    };
+    const id = playerId || queryPlayerId || socket.id;
 
+    socket.playerId = id;
     socket.room = room;
 
-    // send current room players
-    socket.emit("currentPlayers", rooms[room]);
+    let player;
 
+    if (rooms[room][id]) {
+      player = rooms[room][id];
+      player.isOnline = true;
+    } else {
+      player = {
+        x: 0,
+        y: 2,
+        z: 0,
+        name,
+        color: randomColor(),
+        kills: 0,
+        deaths: 0,
+        health: 100,
+        isAlive: true,
+        isOnline: true,
+      };
+    }
+
+    rooms[room][id] = player;
+
+    socket.emit("currentPlayers", rooms[room]);
     io.to(room).emit("scoreUpdate", rooms[room]);
 
-    // notify others
     socket.to(room).emit("newPlayer", {
-      id: socket.id,
-      ...rooms[room][socket.id],
+      id,
+      ...player,
     });
-  });
-
-  socket.on("getRooms", () => {
-    const roomList = Object.keys(rooms).map((roomId) => ({
-      id: roomId,
-      count: Object.keys(rooms[roomId]).length,
-    }));
-
-    socket.emit("roomsList", roomList);
   });
 
   socket.on("move", (data) => {
     const room = socket.room;
-    if (!room || !rooms[room][socket.id]) return;
+    const id = socket.playerId;
 
-    Object.assign(rooms[room][socket.id], data);
+    if (!room || !id) return;
+
+    const player = rooms[room][id];
+    if (!player || !player.isAlive) return;
+
+    Object.assign(player, data);
 
     socket.to(room).emit("playerMoved", {
-      id: socket.id,
+      id,
       ...data,
     });
   });
 
-  socket.on("shootPlayer", ({ targetId, shooterId }) => {
+  socket.on("shootPlayer", ({ targetId }) => {
     const room = socket.room;
-    if (!room) return;
+    const shooterId = socket.playerId;
+
+    if (!room || !targetId || targetId === shooterId) return;
 
     const target = rooms[room][targetId];
     const shooter = rooms[room][shooterId];
 
-    if (!target || !shooter) return;
+    if (!target || !shooter || !target.isAlive) return;
 
-    // reduce health
     target.health -= 10;
 
-    // notify target
-    io.to(targetId).emit("hit", { damage: 10 });
+    // ✅ send hit ONLY to target
+    const targetSocket = findSocketByPlayerId(targetId);
+    if (targetSocket) {
+      targetSocket.emit("hit", {
+        damage: 10,
+        health: target.health,
+      });
+    }
 
-    // if dead
-    if (target.health <= 0) {
+    if (target.health <= 0 && target.isAlive) {
       target.deaths += 1;
       shooter.kills += 1;
+      target.isAlive = false;
 
-      // reset health (simple respawn logic)
-      target.health = 100;
-      target.x = 0;
-      target.y = 2;
-      target.z = 0;
-
-      // notify all players in room
-      io.to(room).emit("scoreUpdate", rooms[room]);
-
-      // optional: notify death event
-      io.to(room).emit("playerKilled", {
+      io.to(room).emit("playerDied", {
+        id: targetId,
         killer: shooter.name,
         victim: target.name,
       });
+
+      io.to(room).emit("scoreUpdate", rooms[room]);
+
+      setTimeout(() => {
+        if (!rooms[room] || !rooms[room][targetId]) return;
+
+        const p = rooms[room][targetId];
+
+        p.health = 100;
+        p.x = 0;
+        p.y = 2;
+        p.z = 0;
+        p.isAlive = true;
+
+        io.to(room).emit("playerRespawn", {
+          id: targetId,
+          ...p,
+        });
+      }, 3000);
     }
   });
 
-  // socket.on("playerDied", ({ id }) => {
-  //   const room = socket.room;
-  //   if (!room) return;
-
-  //   delete rooms[room][socket.id];
-
-  //   socket.to(room).emit("playerDisconnected", socket.id);
-  // });
-
-  // socket.on("playerKilled", ({ killer, victim }) => {
-  //   console.log(`${killer} killed ${victim}`);
-  // });
-
   socket.on("disconnect", () => {
     const room = socket.room;
-    if (!room || !rooms[room]) return;
+    const id = socket.playerId;
 
-    delete rooms[room][socket.id];
+    if (!room || !rooms[room] || !id) return;
 
-    socket.to(room).emit("playerDisconnected", socket.id);
+    const player = rooms[room][id];
+    if (player) player.isOnline = false;
+
+    socket.to(room).emit("playerDisconnected", id);
   });
 });
 

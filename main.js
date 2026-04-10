@@ -9,12 +9,21 @@ let playerName = localStorage.getItem("playerName") || "Player";
 const roomId = localStorage.getItem("roomId") || "default";
 const singlePlayer = constants.IS_SINGLE_PLAYER;
 
+let savedId = localStorage.getItem("playerId");
+if (!savedId) {
+  savedId = crypto.randomUUID();
+  localStorage.setItem("playerId", savedId);
+}
+
 let isAlive = true;
 let isSpectating = false;
 let spectateIndex = 0;
 
 const socket = io(
   `http://${window.location.hostname}:${constants.SERVER_PORT}`,
+  {
+    query: { playerId: savedId },
+  },
 );
 
 window.joinGame = function () {
@@ -42,7 +51,19 @@ socket.on("connect", () => {
   socket.emit("join", { name: playerName, room: roomId });
 });
 
-// create players
+socket.on("playerDied", ({ id }) => {
+  if (otherPlayers[id]) {
+    scene.remove(otherPlayers[id]);
+    delete otherPlayers[id];
+  }
+
+  if (id === savedId) {
+    gameOver();
+  }
+
+  updatePlayerUI();
+});
+
 socket.on("currentPlayers", (players) => {
   for (let id in players) {
     playersState[id] = {
@@ -50,7 +71,8 @@ socket.on("currentPlayers", (players) => {
       kills: players[id].kills || 0,
       deaths: players[id].deaths || 0,
     };
-    if (id === socket.id) continue;
+
+    if (id === savedId) continue;
     if (otherPlayers[id]) continue;
 
     createPlayerMesh(id, players[id]);
@@ -58,13 +80,49 @@ socket.on("currentPlayers", (players) => {
   updatePlayerUI();
 });
 
+socket.on("playerRespawn", (player) => {
+  playersState[player.id] = {
+    name: player.name,
+    kills: player.kills,
+    deaths: player.deaths,
+  };
+
+  const spectateText = document.getElementById("spectateText");
+  if (spectateText) spectateText.remove();
+
+  if (player.id === savedId) {
+    playerHealth = 100;
+    isAlive = true;
+    isSpectating = false;
+    isGameOver = false;
+
+    const healthBar = document.getElementById("health-bar");
+    const healthText = document.getElementById("health-text");
+
+    if (healthBar) healthBar.style.width = "100%";
+    if (healthText) healthText.innerText = "100";
+
+    animate();
+  } else {
+    if (otherPlayers[player.id]) {
+      scene.remove(otherPlayers[player.id]);
+      delete otherPlayers[player.id];
+    }
+    createPlayerMesh(player.id, player);
+  }
+
+  updatePlayerUI();
+});
+
 socket.on("newPlayer", (player) => {
   if (otherPlayers[player.id]) return;
+
   playersState[player.id] = {
     name: player.name,
     kills: player.kills || 0,
     deaths: player.deaths || 0,
   };
+
   createPlayerMesh(player.id, player);
   updatePlayerUI();
 });
@@ -76,15 +134,19 @@ socket.on("playerMoved", (data) => {
 
 socket.on("playerDisconnected", (id) => {
   delete playersState[id];
+
   if (otherPlayers[id]) {
     scene.remove(otherPlayers[id]);
     delete otherPlayers[id];
   }
+
   updatePlayerUI();
 });
 
-socket.on("hit", ({ damage }) => {
-  damagePlayer(damage);
+// ✅ FIXED: only apply damage to correct player
+socket.on("hit", ({ damage, health }) => {
+  playerHealth = health; // server authoritative
+  damagePlayer(0); // just refresh UI
 });
 
 socket.on("scoreUpdate", (players) => {
@@ -108,7 +170,6 @@ function createPlayerMesh(id, data) {
 
   mesh.userData.isPlayer = true;
   mesh.userData.id = id;
-  mesh.userData.color = data.color;
 
   const label = createNameLabel(data.name);
   label.position.set(0, 2.5, 0);
@@ -126,15 +187,15 @@ function updatePlayerUI() {
   playerList.innerHTML = "<b>Players</b><br>";
 
   Object.entries(playersState)
-    .sort((a, b) => b[1].kills - a[1].kills) // 🔥 leaderboard sort
+    .sort((a, b) => b[1].kills - a[1].kills)
     .forEach(([id, player]) => {
       const stats = `(K: ${player.kills} | D: ${player.deaths})`;
 
-      if (id === socket.id && !isAlive) {
+      if (id === savedId && !isAlive) {
         playerList.innerHTML += `☠️ ${player.name} ${stats} (spectating)<br>`;
       } else {
         playerList.innerHTML +=
-          (id === socket.id ? "🟢 " : "🔵 ") + `${player.name} ${stats}<br>`;
+          (id === savedId ? "🟢 " : "🔵 ") + `${player.name} ${stats}<br>`;
       }
     });
 }
@@ -189,7 +250,6 @@ document.addEventListener("keydown", (e) => {
     isOnGround = false;
   }
 
-  // spectate switch
   if (isSpectating) {
     const list = Object.values(otherPlayers);
 
@@ -236,12 +296,10 @@ function shoot() {
     if (hit?.userData.isPlayer) {
       socket.emit("shootPlayer", {
         targetId: hit.userData.id,
-        shooterId: socket.id, // ✅ ADD THIS
       });
     }
   }
 }
-
 // ---------------- GAME LOOP ----------------
 
 function animate() {
@@ -322,6 +380,9 @@ function damagePlayer(amount) {
 
   playerHealth -= amount;
 
+  // ✅ FIX: clamp health
+  playerHealth = Math.max(0, playerHealth);
+
   const healthBar = document.getElementById("health-bar");
   const healthText = document.getElementById("health-text");
 
@@ -340,20 +401,24 @@ function gameOver() {
 
   move.forward = move.back = move.left = move.right = false;
 
-  // socket.emit("playerDied", { id: socket.id });
-
   document.getElementById("health-bar").style.width = "0%";
 
-  const div = document.createElement("div");
-  div.innerText = "SPECTATING MODE";
-  div.style.position = "absolute";
-  div.style.top = "50%";
-  div.style.left = "50%";
-  div.style.transform = "translate(-50%, -50%)";
-  div.style.color = "white";
-  div.style.fontSize = "40px";
+  if (!document.getElementById("spectateText")) {
+    const div = document.createElement("div");
+    div.id = "spectateText";
+    div.innerText = "SPECTATING MODE";
 
-  document.body.appendChild(div);
+    Object.assign(div.style, {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      color: "white",
+      fontSize: "40px",
+    });
+
+    document.body.appendChild(div);
+  }
 }
 
 animate();

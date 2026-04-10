@@ -1,5 +1,7 @@
 import constants from "./constants.js";
 
+let savedId = localStorage.getItem("playerId");
+
 const socket = window.io(
   `http://${window.location.hostname}:${constants.SERVER_PORT}`,
 );
@@ -13,7 +15,7 @@ window.join = function () {
   localStorage.setItem("playerName", name);
   localStorage.setItem("roomId", room);
 
-  socket.emit("join", { name, room });
+  socket.emit("join", { name, room, playerId: savedId });
 
   window.location.href = "./game.html";
 };
