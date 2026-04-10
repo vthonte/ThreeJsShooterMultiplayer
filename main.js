@@ -45,7 +45,11 @@ socket.on("connect", () => {
 // create players
 socket.on("currentPlayers", (players) => {
   for (let id in players) {
-    playersState[id] = players[id].name;
+    playersState[id] = {
+      name: players[id].name,
+      kills: players[id].kills || 0,
+      deaths: players[id].deaths || 0,
+    };
     if (id === socket.id) continue;
     if (otherPlayers[id]) continue;
 
@@ -56,7 +60,11 @@ socket.on("currentPlayers", (players) => {
 
 socket.on("newPlayer", (player) => {
   if (otherPlayers[player.id]) return;
-  playersState[player.id] = player.name;
+  playersState[player.id] = {
+    name: player.name,
+    kills: player.kills || 0,
+    deaths: player.deaths || 0,
+  };
   createPlayerMesh(player.id, player);
   updatePlayerUI();
 });
@@ -77,6 +85,17 @@ socket.on("playerDisconnected", (id) => {
 
 socket.on("hit", ({ damage }) => {
   damagePlayer(damage);
+});
+
+socket.on("scoreUpdate", (players) => {
+  for (let id in players) {
+    if (!playersState[id]) continue;
+
+    playersState[id].kills = players[id].kills;
+    playersState[id].deaths = players[id].deaths;
+  }
+
+  updatePlayerUI();
 });
 
 // ---------------- PLAYER CREATE ----------------
@@ -106,16 +125,18 @@ function createPlayerMesh(id, data) {
 function updatePlayerUI() {
   playerList.innerHTML = "<b>Players</b><br>";
 
-  Object.keys(playersState).forEach((id) => {
-    const name = playersState[id];
+  Object.entries(playersState)
+    .sort((a, b) => b[1].kills - a[1].kills) // 🔥 leaderboard sort
+    .forEach(([id, player]) => {
+      const stats = `(K: ${player.kills} | D: ${player.deaths})`;
 
-    if (id === socket.id && !isAlive) {
-      playerList.innerHTML += "☠️ " + name + " (spectating)<br>";
-    } else {
-      playerList.innerHTML +=
-        (id === socket.id ? "🟢 " : "🔵 ") + name + "<br>";
-    }
-  });
+      if (id === socket.id && !isAlive) {
+        playerList.innerHTML += `☠️ ${player.name} ${stats} (spectating)<br>`;
+      } else {
+        playerList.innerHTML +=
+          (id === socket.id ? "🟢 " : "🔵 ") + `${player.name} ${stats}<br>`;
+      }
+    });
 }
 
 function createNameLabel(name) {
@@ -213,7 +234,10 @@ function shoot() {
     }
 
     if (hit?.userData.isPlayer) {
-      socket.emit("shootPlayer", { targetId: hit.userData.id });
+      socket.emit("shootPlayer", {
+        targetId: hit.userData.id,
+        shooterId: socket.id, // ✅ ADD THIS
+      });
     }
   }
 }
@@ -316,7 +340,7 @@ function gameOver() {
 
   move.forward = move.back = move.left = move.right = false;
 
-  socket.emit("playerDied", { id: socket.id });
+  // socket.emit("playerDied", { id: socket.id });
 
   document.getElementById("health-bar").style.width = "0%";
 

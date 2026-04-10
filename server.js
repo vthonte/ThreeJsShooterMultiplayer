@@ -35,12 +35,17 @@ io.on("connection", (socket) => {
       z: 0,
       name,
       color: randomColor(),
+      kills: 0, // ✅ NEW
+      deaths: 0, // ✅ NEW
+      health: 100, // ✅ NEW (server authority)
     };
 
     socket.room = room;
 
     // send current room players
     socket.emit("currentPlayers", rooms[room]);
+
+    io.to(room).emit("scoreUpdate", rooms[room]);
 
     // notify others
     socket.to(room).emit("newPlayer", {
@@ -70,23 +75,55 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("shootPlayer", ({ targetId }) => {
+  socket.on("shootPlayer", ({ targetId, shooterId }) => {
     const room = socket.room;
     if (!room) return;
 
-    if (rooms[room][targetId]) {
-      io.to(targetId).emit("hit", { damage: 10 });
+    const target = rooms[room][targetId];
+    const shooter = rooms[room][shooterId];
+
+    if (!target || !shooter) return;
+
+    // reduce health
+    target.health -= 10;
+
+    // notify target
+    io.to(targetId).emit("hit", { damage: 10 });
+
+    // if dead
+    if (target.health <= 0) {
+      target.deaths += 1;
+      shooter.kills += 1;
+
+      // reset health (simple respawn logic)
+      target.health = 100;
+      target.x = 0;
+      target.y = 2;
+      target.z = 0;
+
+      // notify all players in room
+      io.to(room).emit("scoreUpdate", rooms[room]);
+
+      // optional: notify death event
+      io.to(room).emit("playerKilled", {
+        killer: shooter.name,
+        victim: target.name,
+      });
     }
   });
 
-  socket.on("playerDied", ({ id }) => {
-    const room = socket.room;
-    if (!room) return;
+  // socket.on("playerDied", ({ id }) => {
+  //   const room = socket.room;
+  //   if (!room) return;
 
-    delete rooms[room][socket.id];
+  //   delete rooms[room][socket.id];
 
-    socket.to(room).emit("playerDisconnected", socket.id);
-  });
+  //   socket.to(room).emit("playerDisconnected", socket.id);
+  // });
+
+  // socket.on("playerKilled", ({ killer, victim }) => {
+  //   console.log(`${killer} killed ${victim}`);
+  // });
 
   socket.on("disconnect", () => {
     const room = socket.room;
