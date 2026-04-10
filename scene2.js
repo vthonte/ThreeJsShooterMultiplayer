@@ -1,5 +1,3 @@
-import constants from "./constants.js";
-
 export function initScene(THREE) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb); // sky blue
@@ -16,24 +14,13 @@ export function initScene(THREE) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  // 🌞 lighting
-  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-  sun.position.set(10, 20, 10);
-  scene.add(sun);
+  // better lighting
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+  scene.add(hemi);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.5);
-  scene.add(ambient);
-
-  // 🌍 ground (no blocks, just floor)
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(constants.WORLD_SIZE, constants.WORLD_SIZE),
-    new THREE.MeshStandardMaterial({ color: 0x88cc88 }), // grass color
-  );
-  ground.rotation.x = -Math.PI / 2;
-  scene.add(ground);
-
-  // 🌫️ fog (gives depth, looks nicer)
-  scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+  dirLight.position.set(5, 10, 7);
+  scene.add(dirLight);
 
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>3D FPS</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      #info {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        z-index: 10;
+        font-family: Arial;
+      }
+
+      #crosshair {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 10px;
+        height: 10px;
+        margin-left: -5px;
+        margin-top: -5px;
+        border: 2px solid white;
+        border-radius: 50%;
+        z-index: 10;
+      }
+      #health {
+        position: absolute;
+        top: 40px;
+        left: 10px;
+        color: red;
+        font-size: 20px;
+        z-index: 10;
+      }
+
+      #hud {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        z-index: 20;
+        font-family: Arial;
+      }
+
+      /* Health container */
+      #health-container {
+        width: 200px;
+        height: 25px;
+        background: rgba(0, 0, 0, 0.6);
+        border: 2px solid white;
+        position: relative;
+      }
+
+      /* Health bar */
+      #health-bar {
+        height: 100%;
+        width: 100%;
+        background: linear-gradient(to right, #00ff00, #66ff66);
+        transition: width 0.2s;
+      }
+
+      /* Health text */
+      #health-text {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        font-weight: bold;
+      }
+      #players {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        padding: 10px;
+        font-family: Arial;
+        z-index: 20;
+        min-width: 150px;
+      }
+
+      #namePrompt {
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: black;
+        padding: 20px;
+        z-index: 100;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="players"></div>
+    <div id="info">Click to play | WASD to move</div>
+    <div id="health">Health: 100</div>
+    <div id="crosshair"></div>
+    <div id="hud">
+      <div id="health-container">
+        <div id="health-bar"></div>
+        <div id="health-text">100</div>
+      </div>
+    </div>
+
+    <!-- 🔥 Import map (this is the key) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js",
+          "three/examples/": "./node_modules/three/examples/"
+        }
+      }
+    </script>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

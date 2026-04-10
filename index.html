@@ -1,59 +1,71 @@
 <!doctype html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <title>3D FPS</title>
-    <style>
-      body {
-        margin: 0;
-        overflow: hidden;
-      }
-      #info {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        color: white;
-        z-index: 10;
-        font-family: Arial;
-      }
-
-      #crosshair {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 10px;
-        height: 10px;
-        margin-left: -5px;
-        margin-top: -5px;
-        border: 2px solid white;
-        border-radius: 50%;
-        z-index: 10;
-      }
-      #health {
-        position: absolute;
-        top: 40px;
-        left: 10px;
-        color: red;
-        font-size: 20px;
-        z-index: 10;
-      }
-    </style>
+    <title>Join Game</title>
   </head>
   <body>
-    <div id="info">Click to play | WASD to move</div>
-    <div id="health">Health: 100</div>
-    <div id="crosshair"></div>
+    <h2>Join Lobby</h2>
 
-    <!-- 🔥 Import map (this is the key) -->
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "./node_modules/three/build/three.module.js",
-          "three/examples/": "./node_modules/three/examples/"
-        }
+    <input id="name" placeholder="Enter name" />
+    <input id="room" placeholder="Room ID (e.g. room1)" />
+
+    <button onclick="join()">Join</button>
+    <h3>Available Rooms</h3>
+    <div id="rooms"></div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+      function join() {
+        const name = document.getElementById("name").value || "Player";
+        const room = document.getElementById("room").value || "default";
+
+        // store locally
+        localStorage.setItem("playerName", name);
+        localStorage.setItem("roomId", room);
+
+        window.location.href = "game.html";
       }
-    </script>
 
-    <script type="module" src="./main.js"></script>
+      const socket = io(
+        `${window.location.protocol}://${window.location.hostname}:${constants.SERVER_PORT}`,
+      );
+
+      function loadRooms() {
+        socket.emit("getRooms");
+      }
+
+      socket.on("roomsList", (rooms) => {
+        const div = document.getElementById("rooms");
+        div.innerHTML = "";
+
+        if (rooms.length === 0) {
+          div.innerHTML = "No rooms yet";
+          return;
+        }
+
+        rooms.forEach((room) => {
+          const btn = document.createElement("button");
+          btn.innerText = room.id + " (" + room.count + " players)";
+
+          btn.onclick = () => {
+            localStorage.setItem(
+              "playerName",
+              document.getElementById("name").value || "Player",
+            );
+            localStorage.setItem("roomId", room.id);
+            window.location.href = "game.html";
+          };
+
+          div.appendChild(btn);
+          div.appendChild(document.createElement("br"));
+        });
+      });
+
+      // auto load rooms
+      loadRooms();
+
+      // refresh every 3 sec
+      setInterval(loadRooms, 3000);
+    </script>
   </body>
 </html>
