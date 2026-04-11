@@ -10,8 +10,19 @@ const roomId = localStorage.getItem("roomId") || "default";
 const singlePlayer = constants.IS_SINGLE_PLAYER;
 
 let savedId = localStorage.getItem("playerId");
+
 if (!savedId) {
-  savedId = crypto.randomUUID();
+  if (window.crypto && crypto.randomUUID) {
+    savedId = crypto.randomUUID();
+  } else {
+    // fallback UUID generator
+    savedId = "xxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
   localStorage.setItem("playerId", savedId);
 }
 
