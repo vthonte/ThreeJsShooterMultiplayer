@@ -1,39 +1,63 @@
 import constants from "./constants.js";
-
-const worldData = [
-  { x: -1, y: 0, z: -1, type: "grass" },
-  { x: 0, y: 0, z: -1, type: "grass" },
-  { x: 1, y: 0, z: -1, type: "grass" },
-
-  { x: -1, y: 0, z: 0, type: "grass" },
-  { x: 0, y: 0, z: 0, type: "grass" },
-  { x: 1, y: 0, z: 0, type: "grass" },
-
-  { x: -1, y: 0, z: 1, type: "grass" },
-  { x: 0, y: 0, z: 1, type: "grass" },
-  { x: 1, y: 0, z: 1, type: "grass" },
-];
 export function createWorld(scene, THREE, worldData) {
-  const blocks = [];
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+  const materials = {
+    grass: new THREE.MeshStandardMaterial({ color: 0x00ff00 }),
+    stone: new THREE.MeshStandardMaterial({ color: 0x888888 }),
+    default: new THREE.MeshStandardMaterial({ color: 0xffffff }),
+  };
+
+  // create ONE instanced mesh per type (important for colors)
+  const groups = {
+    grass: [],
+    stone: [],
+    default: [],
+  };
 
   worldData.forEach((b) => {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({ color: getColor(b.type) }),
-    );
-
-    mesh.position.set(b.x, b.y, b.z);
-    mesh.userData = { isBlock: true, ...b };
-
-    scene.add(mesh);
-    blocks.push(mesh);
+    const type = groups[b.type] ? b.type : "default";
+    groups[type].push(b);
   });
 
-  return blocks;
+  const instancedMeshes = [];
+
+  for (const type in groups) {
+    const list = groups[type];
+
+    const mesh = new THREE.InstancedMesh(
+      geometry,
+      materials[type],
+      list.length,
+    );
+
+    const dummy = new THREE.Object3D();
+
+    list.forEach((b, i) => {
+      dummy.position.set(b.x, b.y, b.z);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+
+    mesh.userData = { type, count: list.length };
+
+    scene.add(mesh);
+    instancedMeshes.push(mesh);
+  }
+
+  return instancedMeshes;
 }
 
-function getColor(type) {
-  if (type === "grass") return 0x00ff00;
-  if (type === "stone") return 0x888888;
-  return 0xffffff;
+/* =========================
+   REBUILD WORLD (IMPORTANT)
+   ========================= */
+
+export function rebuildWorld(scene, THREE, worldData) {
+  // remove old world mesh
+  const old = scene.children.filter((c) => c.userData.isWorld);
+
+  old.forEach((m) => scene.remove(m));
+
+  // create new instanced world
+  return createWorld(scene, THREE, worldData);
 }

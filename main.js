@@ -1,6 +1,6 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js";
 import { initScene } from "./scene.js";
-import { createWorld } from "./world.js";
+import { createWorld, rebuildWorld } from "./world.js";
 import { setupControls } from "./controls.js";
 import { createEnemies } from "./enemies.js";
 import constants from "./constants.js";
@@ -72,9 +72,18 @@ document.getElementById("refreshWorldBtn").onclick = () => {
 
 document.getElementById("generateWorldBtn").onclick = () => {
   const tempWorld = generateWorld(constants.WORLD_SIZE);
-  // 5. SAVE TO LOCALSTORAGE
-  console.log("saving world");
+
   localStorage.setItem("myWorld", JSON.stringify(tempWorld));
+
+  // 👇 PUT IT HERE
+  scene.children
+    .filter((c) => c.userData.isWorld)
+    .forEach((m) => scene.remove(m));
+
+  worldData.length = 0;
+  worldData.push(...tempWorld);
+
+  rebuildWorld(scene, THREE, worldData);
 };
 
 function start(mode) {
@@ -231,18 +240,16 @@ function loadWorldFromFile(file) {
       worldData.push(...newWorld);
 
       // 4. REBUILD WORLD
-      for (const block of worldData) {
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          new THREE.MeshStandardMaterial({ color: 0x00ff00 }),
-        );
+      // REMOVE OLD WORLD
+      scene.children
+        .filter((c) => c.userData.isWorld)
+        .forEach((m) => scene.remove(m));
 
-        mesh.position.set(block.x, block.y, block.z);
-        mesh.userData = { isBlock: true, ...block };
+      worldData.length = 0;
+      worldData.push(...newWorld);
 
-        scene.add(mesh);
-        objects.push(mesh);
-      }
+      // REBUILD INSTANCED WORLD
+      rebuildWorld(scene, THREE, worldData);
 
       // 5. SAVE TO LOCALSTORAGE
       localStorage.setItem("myWorld", JSON.stringify(worldData));
