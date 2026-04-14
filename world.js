@@ -1,38 +1,39 @@
 import constants from "./constants.js";
 
-export function createWorld(scene, THREE) {
-  const objects = [];
+const worldData = [
+  { x: -1, y: 0, z: -1, type: "grass" },
+  { x: 0, y: 0, z: -1, type: "grass" },
+  { x: 1, y: 0, z: -1, type: "grass" },
 
-  // floor
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(constants.WORLD_SIZE, constants.WORLD_SIZE),
-    new THREE.MeshStandardMaterial({ color: 0xaaaaaa }),
-  );
-  floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
+  { x: -1, y: 0, z: 0, type: "grass" },
+  { x: 0, y: 0, z: 0, type: "grass" },
+  { x: 1, y: 0, z: 0, type: "grass" },
 
-  // buildings
-  for (let i = 0; i < 50; i++) {
-    const geo = new THREE.BoxGeometry(
-      Math.random() * 3 + 1,
-      Math.random() * 10 + 2,
-      Math.random() * 3 + 1,
+  { x: -1, y: 0, z: 1, type: "grass" },
+  { x: 0, y: 0, z: 1, type: "grass" },
+  { x: 1, y: 0, z: 1, type: "grass" },
+];
+export function createWorld(scene, THREE, worldData) {
+  const blocks = [];
+
+  worldData.forEach((b) => {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: getColor(b.type) }),
     );
 
-    const box = new THREE.Mesh(
-      geo,
-      new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }),
-    );
+    mesh.position.set(b.x, b.y, b.z);
+    mesh.userData = { isBlock: true, ...b };
 
-    box.position.set(
-      (Math.random() - 0.5) * 100,
-      geo.parameters.height / 2,
-      (Math.random() - 0.5) * 100,
-    );
+    scene.add(mesh);
+    blocks.push(mesh);
+  });
 
-    scene.add(box);
-    objects.push(box); // 👈 track collision objects
-  }
+  return blocks;
+}
 
-  return objects;
+function getColor(type) {
+  if (type === "grass") return 0x00ff00;
+  if (type === "stone") return 0x888888;
+  return 0xffffff;
 }

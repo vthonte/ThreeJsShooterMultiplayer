@@ -10,6 +10,10 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
+app.post("/saveWorld", (req, res) => {
+  fs.writeFileSync("world.json", JSON.stringify(req.body));
+});
+
 const rooms = {};
 
 function randomColor() {

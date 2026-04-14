@@ -29,6 +29,20 @@ export function initScene(THREE) {
     new THREE.PlaneGeometry(constants.WORLD_SIZE, constants.WORLD_SIZE),
     new THREE.MeshStandardMaterial({ color: 0x88cc88 }), // grass color
   );
+
+  const buildPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(500, 500),
+    new THREE.MeshBasicMaterial({
+      visible: false, // invisible but raycastable
+    }),
+  );
+
+  buildPlane.rotation.x = -Math.PI / 2;
+  buildPlane.position.y = 0;
+  buildPlane.userData.isGround = true;
+
+  scene.add(buildPlane);
+
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
@@ -41,5 +55,5 @@ export function initScene(THREE) {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer };
+  return { scene, camera, renderer, buildPlane };
 }

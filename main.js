@@ -4,12 +4,34 @@ import { createWorld } from "./world.js";
 import { setupControls } from "./controls.js";
 import { createEnemies } from "./enemies.js";
 import constants from "./constants.js";
+import { generateWorld } from "./generateWorld.js";
 
 let playerName = localStorage.getItem("playerName") || "Player";
 const roomId = localStorage.getItem("roomId") || "default";
 const singlePlayer = constants.IS_SINGLE_PLAYER;
-
+const isCreatorMode = localStorage.getItem("mode") === "creator";
 let savedId = localStorage.getItem("playerId");
+let worldData = JSON.parse(localStorage.getItem("myWorld")) || [];
+
+let lastHit = null;
+
+let isMouseDown = false;
+let activeMouseButton = null;
+
+let selectedColor = 0x00ff00;
+
+let lastPlaceTime = 0;
+const PLACE_DELAY = constants.PLACE_DELAY; // ms
+
+function canPlace() {
+  return Date.now() - lastPlaceTime > PLACE_DELAY;
+}
+
+const picker = document.getElementById("colorPicker");
+
+picker.addEventListener("input", (e) => {
+  selectedColor = parseInt(e.target.value.replace("#", "0x"));
+});
 
 if (!savedId) {
   if (window.crypto && crypto.randomUUID) {
@@ -30,6 +52,37 @@ let isAlive = true;
 let isSpectating = false;
 let spectateIndex = 0;
 
+document.getElementById("creatorBtn").onclick = () => {
+  start("creator");
+};
+
+document.getElementById("playBtn").onclick = () => {
+  start("play");
+};
+
+document.getElementById("saveWorldBtn").onclick = () => {
+  downloadWorld();
+};
+
+document.getElementById("refreshWorldBtn").onclick = () => {
+  // 5. SAVE TO LOCALSTORAGE
+  console.log("saving world");
+  localStorage.setItem("myWorld", JSON.stringify([]));
+};
+
+document.getElementById("generateWorldBtn").onclick = () => {
+  const tempWorld = generateWorld(constants.WORLD_SIZE);
+  // 5. SAVE TO LOCALSTORAGE
+  console.log("saving world");
+  localStorage.setItem("myWorld", JSON.stringify(tempWorld));
+};
+
+function start(mode) {
+  console.log("setting mode: " + mode);
+  localStorage.setItem("mode", mode);
+  window.location.href = "game.html";
+}
+
 const socket = io(
   `http://${window.location.hostname}:${constants.SERVER_PORT}`,
   {
@@ -42,8 +95,9 @@ window.joinGame = function () {
   playerName = input.value || "Player";
 
   document.getElementById("namePrompt").style.display = "none";
-
-  socket.emit("join", { name: playerName, room: roomId });
+  if (!isCreatorMode) {
+    socket.emit("join", { name: playerName, room: roomId });
+  }
 };
 
 const playerList = document.getElementById("players");
@@ -51,15 +105,214 @@ const playersState = {};
 const otherPlayers = {};
 
 // scene
-const { scene, camera, renderer } = initScene(THREE);
-const objects = createWorld(scene, THREE);
+const { scene, camera, renderer, buildPlane } = initScene(THREE);
+const objects = createWorld(scene, THREE, worldData);
 const enemies = singlePlayer ? createEnemies(scene, THREE) : [];
-const controls = setupControls(camera);
+const controls = setupControls(camera, isCreatorMode);
+
+const raycaster = new THREE.Raycaster();
+const center = new THREE.Vector2(0, 0);
+
+const preview = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    // wireframe: true,
+    transparent: true,
+    opacity: 0.5,
+  }),
+);
+
+preview.visible = false;
+scene.add(preview);
+
+// document.addEventListener("mousedown", (e) => {
+//   if (!isCreatorMode) return;
+
+//   // LEFT CLICK = place
+//   if (e.button === 0) {
+//     handleBlockPlace();
+//   }
+
+//   // RIGHT CLICK = remove
+//   if (e.button === 2) {
+//     e.preventDefault();
+//     handleBlockRemove();
+//   }
+// });
+
+document.addEventListener("mousedown", (e) => {
+  if (!isCreatorMode) return;
+
+  isMouseDown = true;
+  activeMouseButton = e.button;
+
+  // place immediately on click
+  if (e.button === 0) {
+    handleBlockPlace();
+  }
+
+  if (e.button === 2) {
+    e.preventDefault();
+    handleBlockRemove();
+  }
+});
+
+document.addEventListener("mouseup", () => {
+  isMouseDown = false;
+  activeMouseButton = null;
+});
+
+document.addEventListener("mousemove", () => {
+  if (!isCreatorMode) return;
+
+  raycaster.setFromCamera(center, camera);
+
+  const intersects = raycaster.intersectObjects([...objects, buildPlane], true);
+
+  if (!intersects.length) {
+    preview.visible = false;
+    lastHit = null;
+    return;
+  }
+
+  lastHit = intersects[0];
+
+  const pos = getBlockPosition(lastHit);
+
+  preview.position.set(pos.x, pos.y, pos.z);
+  preview.visible = true;
+
+  if (!isCreatorMode) return;
+
+  // update preview first (you already do this)
+
+  if (isMouseDown && activeMouseButton === 0 && canPlace()) {
+    handleBlockPlace();
+    lastPlaceTime = Date.now();
+  }
+
+  if (isMouseDown && activeMouseButton === 2) {
+    handleBlockRemove();
+  }
+});
+
+function getRootObject(obj) {
+  while (
+    obj &&
+    !obj.userData.isBlock &&
+    !obj.userData.isPlayer &&
+    !obj.userData.isEnemy
+  ) {
+    obj = obj.parent;
+  }
+  return obj;
+}
+
+function loadWorldFromFile(file) {
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+
+      const newWorld = data.world || [];
+
+      // 1. REMOVE OLD BLOCK MESHES FROM SCENE
+      for (const obj of objects) {
+        scene.remove(obj);
+      }
+
+      // 2. CLEAR OLD ARRAYS
+      objects.length = 0;
+      worldData.length = 0;
+
+      // 3. LOAD NEW WORLD DATA
+      worldData.push(...newWorld);
+
+      // 4. REBUILD WORLD
+      for (const block of worldData) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          new THREE.MeshStandardMaterial({ color: 0x00ff00 }),
+        );
+
+        mesh.position.set(block.x, block.y, block.z);
+        mesh.userData = { isBlock: true, ...block };
+
+        scene.add(mesh);
+        objects.push(mesh);
+      }
+
+      // 5. SAVE TO LOCALSTORAGE
+      localStorage.setItem("myWorld", JSON.stringify(worldData));
+
+      console.log("World loaded successfully:", worldData.length, "blocks");
+    } catch (err) {
+      console.error("Failed to load world file:", err);
+    }
+  };
+
+  reader.readAsText(file);
+}
+
+document.getElementById("worldFileInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) loadWorldFromFile(file);
+});
+
+function downloadWorld() {
+  const data = {
+    world: worldData,
+    savedAt: new Date().toISOString(),
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `world-${Date.now()}.json`;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function handleBlockPlace() {
+  if (!lastHit) return;
+
+  const pos = getBlockPosition(lastHit);
+  addBlock(pos.x, pos.y, pos.z);
+  saveWorld();
+}
+
+function handleBlockRemove() {
+  raycaster.setFromCamera(center, camera);
+
+  const intersects = raycaster.intersectObjects(
+    [...objects, buildPlane],
+    false,
+  );
+
+  if (!intersects.length) return;
+
+  const hit = getRootObject(intersects[0].object);
+
+  if (hit?.userData.isBlock) {
+    removeBlock(hit);
+  }
+  saveWorld();
+}
 
 // ---------------- SOCKET ----------------
 
 socket.on("connect", () => {
-  socket.emit("join", { name: playerName, room: roomId });
+  if (!isCreatorMode) {
+    socket.emit("join", { name: playerName, room: roomId });
+  }
 });
 
 socket.on("playerDied", ({ id }) => {
@@ -154,11 +407,20 @@ socket.on("playerDisconnected", (id) => {
   updatePlayerUI();
 });
 
-// ✅ FIXED: only apply damage to correct player
 socket.on("hit", ({ damage, health }) => {
-  playerHealth = health; // server authoritative
-  damagePlayer(0); // just refresh UI
+  playerHealth = health;
+  updateHealthUI();
+
+  if (playerHealth <= 0) gameOver();
 });
+
+function updateHealthUI() {
+  const healthBar = document.getElementById("health-bar");
+  const healthText = document.getElementById("health-text");
+
+  if (healthBar) healthBar.style.width = playerHealth + "%";
+  if (healthText) healthText.innerText = playerHealth;
+}
 
 socket.on("scoreUpdate", (players) => {
   for (let id in players) {
@@ -232,9 +494,6 @@ function createNameLabel(name) {
 
 // ---------------- GAME ----------------
 
-const raycaster = new THREE.Raycaster();
-const center = new THREE.Vector2(0, 0);
-
 let playerHealth = 100;
 let isGameOver = false;
 
@@ -274,6 +533,36 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+document.addEventListener("contextmenu", (e) => {
+  if (!isCreatorMode) return;
+
+  e.preventDefault();
+
+  raycaster.setFromCamera(center, camera);
+
+  const intersects = raycaster.intersectObjects(
+    [...objects, buildPlane],
+    false,
+  );
+
+  if (!intersects.length) return;
+
+  const hitObj = getRootObject(intersects[0].object);
+  const hit = intersects[0];
+
+  let pos = hit.point.clone();
+
+  if (hit.face && hitObj?.userData.isBlock) {
+    pos.add(hit.face.normal);
+  }
+
+  pos.x = Math.round(pos.x);
+  pos.y = Math.round(pos.y);
+  pos.z = Math.round(pos.z);
+
+  addBlock(pos.x, pos.y, pos.z);
+});
+
 document.addEventListener("keyup", (e) => {
   if (e.key === "w") move.forward = false;
   if (e.key === "s") move.back = false;
@@ -283,27 +572,91 @@ document.addEventListener("keyup", (e) => {
 
 // ---------------- SHOOT ----------------
 
-document.addEventListener("click", shoot);
+if (!isCreatorMode) {
+  document.addEventListener("click", shoot);
+}
+
+function addBlock(x, y, z) {
+  const exists = worldData.some((b) => b.x === x && b.y === y && b.z === z);
+
+  if (exists) return;
+
+  const block = { x, y, z, type: "grass" };
+  worldData.push(block);
+
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color: selectedColor }),
+  );
+
+  mesh.position.set(x, y, z);
+  mesh.userData = { isBlock: true, ...block };
+
+  scene.add(mesh);
+  objects.push(mesh);
+}
+
+function removeBlock(mesh) {
+  scene.remove(mesh);
+
+  const { x, y, z } = mesh.position;
+
+  const index = worldData.findIndex(
+    (b) =>
+      b.x === Math.round(x) && b.y === Math.round(y) && b.z === Math.round(z),
+  );
+  if (index !== -1) worldData.splice(index, 1);
+
+  const idx = objects.indexOf(mesh);
+  if (idx !== -1) objects.splice(idx, 1);
+}
+
+function saveWorld() {
+  localStorage.setItem("myWorld", JSON.stringify(worldData));
+}
+
+function getBlockPosition(hit) {
+  const pos = new THREE.Vector3();
+
+  const hitObj = getRootObject(hit.object);
+
+  if (hitObj?.userData.isBlock && hit.face) {
+    // go from block center → next voxel cell
+    pos.copy(hitObj.position).add(hit.face.normal);
+  } else {
+    pos.copy(hit.point);
+  }
+
+  // SNAP TO GRID
+  pos.x = Math.round(pos.x);
+  pos.y = Math.round(pos.y);
+  pos.z = Math.round(pos.z);
+
+  return pos;
+}
 
 function shoot() {
-  if (!isAlive) return;
+  if (!isAlive || isCreatorMode) return;
 
   raycaster.setFromCamera(center, camera);
 
   const playerMeshes = Object.values(otherPlayers);
 
   const intersects = raycaster.intersectObjects(
-    [...enemies, ...playerMeshes],
+    [...enemies, ...playerMeshes, ...objects], // 👈 include blocks
     true,
   );
 
   if (intersects.length > 0) {
-    let hit = intersects[0].object;
+    const hit = getRootObject(intersects[0].object);
 
-    while (hit && !hit.userData.isEnemy && !hit.userData.isPlayer) {
-      hit = hit.parent;
+    // 🧱 CREATOR MODE: remove block
+    if (isCreatorMode && hit?.userData.isBlock) {
+      removeBlock(hit);
+      return;
     }
 
+    // 🔫 MULTIPLAYER SHOOT
     if (hit?.userData.isPlayer) {
       socket.emit("shootPlayer", {
         targetId: hit.userData.id,

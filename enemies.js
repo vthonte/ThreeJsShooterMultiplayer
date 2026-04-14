@@ -7,7 +7,7 @@ export function createEnemies(scene, THREE) {
 
     // BODY
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1.5, 0.5),
+      new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshStandardMaterial({
         color: 0xff0000,
         emissive: 0x550000,

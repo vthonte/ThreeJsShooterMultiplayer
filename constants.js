@@ -4,6 +4,12 @@ const constants = {
   IS_SINGLE_PLAYER: false,
   GAME_PORT: 3000,
   SERVER_PORT: 3001, //Not needed if using GAME_PORT
+  PLACE_DELAY: 50,
+  playerSize: {
+    width: 1,
+    height: 2,
+    depth: 1,
+  },
 };
 
 export default constants;
