@@ -1,3 +1,4 @@
+import { gameOver } from "../multiplayer/socket.js";
 import { state } from "../state.js";
 
 state.savedId = localStorage.getItem("playerId");

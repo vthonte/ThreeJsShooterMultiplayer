@@ -137,7 +137,7 @@ function updateHealthUI() {
   if (healthText) healthText.innerText = state.playerHealth;
 }
 
-function gameOver() {
+export function gameOver() {
   if (state.isGameOver) return;
 
   state.isAlive = false;
