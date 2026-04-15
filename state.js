@@ -1,6 +1,5 @@
 export const state = {
   selectedColor: 0x00ff00,
-  savedId: "",
   isMouseDown: false,
   activeMouseButton: null,
   lastPlaceTime: 0,

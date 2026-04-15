@@ -1,56 +1,47 @@
-import constants from "./constants.js";
-import { setPlayerId } from "./player/playerDetails.js";
-import { state } from "./state.js";
+import { generatePlayerId } from "./utils/generatePlayerId.js";
 
-// let playerId = localStorage.getItem("playerId");
+const joinBtn = document.getElementById("joinBtn");
 
-const socket = window.io(
-  `http://${window.location.hostname}:${constants.SERVER_PORT}`,
-);
-
-window.join = function () {
-  console.log("join in room.js");
+joinBtn.onclick = () => {
   const name = document.getElementById("name").value || "Player";
   const room = document.getElementById("room").value || "default";
-  state.playerId = localStorage.getItem("playerId") || setPlayerId();
+  const playerId = localStorage.getItem("playerId") || generatePlayerId();
 
-  console.log("JOIN CLICKED");
-
+  // store locally
   localStorage.setItem("playerName", name);
   localStorage.setItem("roomId", room);
+  localStorage.setItem("playerId", playerId);
 
-  socket.emit("join", {
-    name,
-    room,
-    playerId: state.playerId || setPlayerId(),
-  });
-
-  window.location.href = "./game.html";
+  window.location.href = "game.html";
 };
 
+const socket = io(`http://${window.location.hostname}:3001`);
+
 function loadRooms() {
+  console.log("emitting socket");
   socket.emit("getRooms");
 }
-
 socket.on("roomsList", (rooms) => {
+  console.log("received rooms:", rooms);
+
   const div = document.getElementById("rooms");
   div.innerHTML = "";
 
-  if (rooms.length === 0) {
+  if (!rooms || rooms.length === 0) {
     div.innerHTML = "No rooms yet";
     return;
   }
 
   rooms.forEach((room) => {
     const btn = document.createElement("button");
-    btn.innerText = room.id + " (" + room.count + " players)";
+    btn.innerText = `${room.id} (${room.count} players)`;
 
     btn.onclick = () => {
-      localStorage.setItem(
-        "playerName",
-        document.getElementById("name").value || "Player",
-      );
+      const name = document.getElementById("name").value || "Player";
+
+      localStorage.setItem("playerName", name);
       localStorage.setItem("roomId", room.id);
+
       window.location.href = "game.html";
     };
 

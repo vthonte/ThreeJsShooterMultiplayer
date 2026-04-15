@@ -10,61 +10,11 @@
     <input id="name" placeholder="Enter name" />
     <input id="room" placeholder="Room ID (e.g. room1)" />
 
-    <button onclick="join()">Join</button>
+    <button id="joinBtn">Join</button>
     <h3>Available Rooms</h3>
     <div id="rooms"></div>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script>
-      function join() {
-        const name = document.getElementById("name").value || "Player";
-        const room = document.getElementById("room").value || "default";
-
-        // store locally
-        localStorage.setItem("playerName", name);
-        localStorage.setItem("roomId", room);
-
-        window.location.href = "game.html";
-      }
-
-      const socket = io(`http://${window.location.hostname}:3001`);
-
-      function loadRooms() {
-        socket.emit("getRooms");
-      }
-
-      socket.on("roomsList", (rooms) => {
-        const div = document.getElementById("rooms");
-        div.innerHTML = "";
-
-        if (rooms.length === 0) {
-          div.innerHTML = "No rooms yet";
-          return;
-        }
-
-        rooms.forEach((room) => {
-          const btn = document.createElement("button");
-          btn.innerText = room.id + " (" + room.count + " players)";
-
-          btn.onclick = () => {
-            localStorage.setItem(
-              "playerName",
-              document.getElementById("name").value || "Player",
-            );
-            localStorage.setItem("roomId", room.id);
-            window.location.href = "game.html";
-          };
-
-          div.appendChild(btn);
-          div.appendChild(document.createElement("br"));
-        });
-      });
-
-      // auto load rooms
-      loadRooms();
-
-      // refresh every 3 sec
-      setInterval(loadRooms, 3000);
-    </script>
+    <script type="module" src="./room.js"></script>
   </body>
 </html>

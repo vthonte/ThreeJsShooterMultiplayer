@@ -145,11 +145,11 @@ export function updatePlayerUI() {
     .forEach(([id, player]) => {
       const stats = `(K: ${player.kills} | D: ${player.deaths})`;
 
-      if (id === state.savedId && !state.isAlive) {
+      if (id === state.playerId && !state.isAlive) {
         state.playerList.innerHTML += `☠️ ${player.name} ${stats} (spectating)<br>`;
       } else {
         state.playerList.innerHTML +=
-          (id === state.savedId ? "🟢 " : "🔵 ") +
+          (id === state.playerId ? "🟢 " : "🔵 ") +
           `${player.name} ${stats}<br>`;
       }
     });

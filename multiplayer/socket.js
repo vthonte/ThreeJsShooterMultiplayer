@@ -7,7 +7,7 @@ import { updatePlayerUI } from "../ui/hud.js";
 state.socket = io(
   `http://${window.location.hostname}:${constants.SERVER_PORT}`,
   {
-    query: { playerId: state.savedId },
+    query: { playerId: state.playerId },
   },
 );
 
@@ -29,7 +29,7 @@ state.socket.on("playerDied", ({ id }) => {
     delete state.otherPlayers[id];
   }
 
-  if (id === state.savedId) {
+  if (id === state.playerId) {
     gameOver();
   }
 
@@ -44,7 +44,7 @@ state.socket.on("currentPlayers", (players) => {
       deaths: players[id].deaths || 0,
     };
 
-    if (id === state.savedId) continue;
+    if (id === state.playerId) continue;
     if (state.otherPlayers[id]) continue;
 
     createPlayerMesh(id, players[id]);
@@ -62,7 +62,7 @@ state.socket.on("playerRespawn", (player) => {
   const spectateText = document.getElementById("spectateText");
   if (spectateText) spectateText.remove();
 
-  if (player.id === state.savedId) {
+  if (player.id === state.playerId) {
     state.playerHealth = 100;
     state.isAlive = true;
     state.isSpectating = false;

@@ -89,6 +89,17 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("getRooms", () => {
+    const roomList = Object.entries(rooms).map(([roomId, players]) => {
+      return {
+        id: roomId,
+        count: Object.values(players).filter((p) => p.isOnline).length,
+      };
+    });
+
+    socket.emit("roomsList", roomList);
+  });
+
   socket.on("shootPlayer", ({ targetId }) => {
     const room = socket.room;
     const shooterId = socket.playerId;
