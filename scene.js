@@ -206,7 +206,7 @@ export function removeBlock(mesh) {
 export function createWorld(scene, worldData) {
   const objects = [];
 
-  worldData.forEach((b) => {
+  worldData?.forEach((b) => {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshStandardMaterial({ color: 0x00ff00 }),
@@ -236,7 +236,7 @@ export function createWorld(scene, worldData) {
 
 export function rebuildWorld(scene, worldData) {
   // ================= REMOVE OLD BLOCKS =================
-  state.objects.forEach((obj) => {
+  state.objects?.forEach((obj) => {
     // remove mesh
     scene.remove(obj);
 

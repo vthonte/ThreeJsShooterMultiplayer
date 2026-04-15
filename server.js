@@ -15,6 +15,7 @@ app.post("/saveWorld", (req, res) => {
 });
 
 const rooms = {};
+const roomMaps = {}; // { roomId: worldData[] }
 
 function randomColor() {
   return Math.floor(Math.random() * 0xffffff);
@@ -29,6 +30,17 @@ function findSocketByPlayerId(playerId) {
 
 io.on("connection", (socket) => {
   const queryPlayerId = socket.handshake.query.playerId;
+
+  socket.on("updateMap", ({ room, worldData }) => {
+    if (!room) return;
+
+    console.log("Map updated for room:", room, worldData);
+
+    roomMaps[room] = worldData;
+
+    // send to everyone in room
+    io.to(room).emit("mapData", worldData);
+  });
 
   socket.on("join", ({ name, room, playerId }) => {
     socket.join(room);
@@ -70,6 +82,12 @@ io.on("connection", (socket) => {
       id,
       ...player,
     });
+
+    // after socket.join(room)
+
+    if (roomMaps[room]) {
+      socket.to(room).emit("mapData", roomMaps[room]);
+    }
   });
 
   socket.on("move", (data) => {

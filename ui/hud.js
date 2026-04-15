@@ -10,6 +10,16 @@ document.getElementById("colorPicker").addEventListener("input", (e) => {
   state.selectedColor = parseInt(e.target.value.replace("#", "0x"));
 });
 
+document.getElementById("publishMap").onclick = () => {
+  console.log(JSON.stringify(state.worldData));
+  state.socket.emit("updateMap", {
+    room: state.roomId,
+    worldData: state.worldData.length
+      ? state.worldData
+      : localStorage.getItem("myWorld"),
+  });
+};
+
 document.getElementById("creatorBtn").onclick = () => {
   start("creator");
 };

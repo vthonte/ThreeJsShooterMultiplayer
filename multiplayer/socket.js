@@ -1,6 +1,6 @@
 import constants from "../constants.js";
 import { animate } from "../core/loop.js";
-import { createPlayerMesh } from "../scene.js";
+import { createPlayerMesh, rebuildWorld } from "../scene.js";
 import { state } from "../state.js";
 import { updatePlayerUI } from "../ui/hud.js";
 
@@ -20,6 +20,47 @@ state.socket.on("connect", () => {
       room: state.roomId,
       playerId: state.playerId,
     });
+  }
+});
+
+state.socket.on("mapData", (worldData) => {
+  let parsedData = [];
+
+  try {
+    // If it's a string, try parsing it
+    if (typeof worldData === "string") {
+      parsedData = JSON.parse(worldData);
+    }
+    // If it's already an array, use it directly
+    else if (Array.isArray(worldData)) {
+      parsedData = worldData;
+    }
+    // Anything else → ignore
+    else {
+      console.warn("Invalid worldData type:", typeof worldData);
+      return;
+    }
+
+    // Ensure it's actually an array after parsing
+    if (!Array.isArray(parsedData)) {
+      console.log("Parsed worldData is not an array");
+      return;
+    }
+
+    // Update state
+    state.worldData = parsedData;
+    // Save locally
+    localStorage.setItem("myWorld", JSON.stringify(parsedData));
+
+    if (parsedData.length !== 0) {
+      console.log("Empty worldData received");
+      return;
+    }
+
+    // Rebuild world
+    rebuildWorld(state.scene, state.worldData);
+  } catch (err) {
+    console.error("Failed to parse worldData:", err);
   }
 });
 
