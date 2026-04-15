@@ -18,7 +18,7 @@ if (!state.savedId) {
     );
   }
 
-  localStorage.setItem("playerId", savedId);
+  localStorage.setItem("playerId", state.savedId);
 }
 
 // ---------------- DAMAGE / DEATH ----------------
