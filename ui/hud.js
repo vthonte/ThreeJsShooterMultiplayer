@@ -33,17 +33,11 @@ document.getElementById("generateWorldBtn").onclick = () => {
 
   localStorage.setItem("myWorld", JSON.stringify(tempWorld));
 
-  // 👇 PUT IT HERE
-  state.scene.children
-    .filter((c) => c.userData.isWorld)
-    .forEach((m) => state.scene.remove(m));
-
   state.worldData.length = 0;
   state.worldData.push(...tempWorld);
 
   rebuildWorld(state.scene, state.worldData);
 };
-
 document.getElementById("worldFileInput").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (file) loadWorldFromFile(file);
@@ -117,34 +111,16 @@ function loadWorldFromFile(file) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-
       const newWorld = data.world || [];
 
-      // 1. REMOVE OLD BLOCK MESHES FROM SCENE
-      for (const obj of state.objects) {
-        state.scene.remove(obj);
-      }
-
-      // 2. CLEAR OLD ARRAYS
-      state.objects.length = 0;
-      state.worldData.length = 0;
-
-      // 3. LOAD NEW WORLD DATA
-      state.worldData.push(...newWorld);
-
-      // 4. REBUILD WORLD
-      // REMOVE OLD WORLD
-      state.scene.children
-        .filter((c) => c.userData.isWorld)
-        .forEach((m) => state.scene.remove(m));
-
+      // ✅ update state
       state.worldData.length = 0;
       state.worldData.push(...newWorld);
 
-      // REBUILD INSTANCED WORLD
+      // ✅ rebuild cleanly
       rebuildWorld(state.scene, state.worldData);
 
-      // 5. SAVE TO LOCALSTORAGE
+      // ✅ save
       localStorage.setItem("myWorld", JSON.stringify(state.worldData));
 
       console.log(
@@ -159,7 +135,6 @@ function loadWorldFromFile(file) {
 
   reader.readAsText(file);
 }
-
 // ---------------- UI ----------------
 
 export function updatePlayerUI() {

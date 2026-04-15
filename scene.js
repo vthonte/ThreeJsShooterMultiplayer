@@ -3,10 +3,16 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.m
 import { state } from "./state.js";
 import { setupControls } from "./controls.js";
 import { createEnemies } from "./enemies.js";
+import { createPlayerPhysics } from "./playerPhysics.js";
 
-export function initScene(THREE) {
+import { world } from "./physics.js";
+import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm";
+
+// ================= INIT SCENE =================
+
+export function initScene() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87ceeb); // sky blue
+  scene.background = new THREE.Color(0x87ceeb);
 
   const camera = new THREE.PerspectiveCamera(
     75,
@@ -28,29 +34,38 @@ export function initScene(THREE) {
   const ambient = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambient);
 
-  // 🌍 ground (no blocks, just floor)
+  // 🌍 visual ground
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(constants.WORLD_SIZE, constants.WORLD_SIZE),
-    new THREE.MeshStandardMaterial({ color: 0x88cc88 }), // grass color
+    new THREE.MeshStandardMaterial({ color: 0x88cc88 }),
   );
-
-  const buildPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(500, 500),
-    new THREE.MeshBasicMaterial({
-      visible: false, // invisible but raycastable
-    }),
-  );
-
-  buildPlane.rotation.x = -Math.PI / 2;
-  buildPlane.position.y = 0;
-  buildPlane.userData.isGround = true;
-
-  scene.add(buildPlane);
-
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  // 🌫️ fog (gives depth, looks nicer)
+  // ✅ PHYSICS GROUND
+  const groundBody = world.createRigidBody(
+    RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0),
+  );
+
+  world.createCollider(
+    RAPIER.ColliderDesc.cuboid(
+      constants.WORLD_SIZE / 2,
+      0.1,
+      constants.WORLD_SIZE / 2,
+    ),
+    groundBody,
+  );
+
+  // invisible build plane
+  const buildPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(500, 500),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  buildPlane.rotation.x = -Math.PI / 2;
+  buildPlane.userData.isGround = true;
+  scene.add(buildPlane);
+
+  // fog
   scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
 
   window.addEventListener("resize", () => {
@@ -59,10 +74,45 @@ export function initScene(THREE) {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer, buildPlane };
+  // ================= STATE SETUP =================
+
+  state.scene = scene;
+  state.camera = camera;
+  state.renderer = renderer;
+  state.buildPlane = buildPlane;
+
+  // ✅ create player physics AFTER world exists
+  createPlayerPhysics();
+
+  // world blocks
+  state.objects = createWorld(scene, state.worldData);
+
+  // enemies
+  state.enemies = state.isSinglePlayer ? createEnemies(scene, THREE) : [];
+
+  // controls
+  state.controls = setupControls(camera, state.isCreatorMode);
+
+  // raycasting
+  state.raycaster = new THREE.Raycaster();
+  state.center = new THREE.Vector2(0, 0);
+
+  // preview block
+  state.preview = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0.5,
+    }),
+  );
+
+  state.preview.visible = false;
+  scene.add(state.preview);
+
+  state.pos = new THREE.Vector3();
 }
 
-// ---------------- PLAYER CREATE ----------------
+// ================= PLAYER =================
 
 export function createPlayerMesh(id, data) {
   const mesh = new THREE.Mesh(
@@ -79,7 +129,7 @@ export function createPlayerMesh(id, data) {
 
   mesh.position.set(data.x, data.y, data.z);
 
-  scene.add(mesh);
+  state.scene.add(mesh);
   state.otherPlayers[id] = mesh;
 }
 
@@ -102,11 +152,12 @@ export function createNameLabel(name) {
   return sprite;
 }
 
+// ================= BLOCKS =================
+
 export function addBlock(x, y, z) {
   const exists = state.worldData.some(
     (b) => b.x === x && b.y === y && b.z === z,
   );
-
   if (exists) return;
 
   const block = { x, y, z, type: "grass" };
@@ -120,12 +171,22 @@ export function addBlock(x, y, z) {
   mesh.position.set(x, y, z);
   mesh.userData = { isBlock: true, ...block };
 
-  scene.add(mesh);
+  state.scene.add(mesh);
   state.objects.push(mesh);
+
+  // physics
+  const body = world.createRigidBody(
+    RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z),
+  );
+
+  world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 0.5, 0.5), body);
+
+  // ✅ store
+  mesh.userData.physicsBody = body;
 }
 
 export function removeBlock(mesh) {
-  scene.remove(mesh);
+  state.scene.remove(mesh);
 
   const { x, y, z } = mesh.position;
 
@@ -133,109 +194,60 @@ export function removeBlock(mesh) {
     (b) =>
       b.x === Math.round(x) && b.y === Math.round(y) && b.z === Math.round(z),
   );
+
   if (index !== -1) state.worldData.splice(index, 1);
 
   const idx = state.objects.indexOf(mesh);
   if (idx !== -1) state.objects.splice(idx, 1);
 }
 
-export function createWorld(scene, THREE, worldData) {
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
+// ================= WORLD =================
 
-  const materials = {
-    grass: new THREE.MeshStandardMaterial({ color: 0x00ff00 }),
-    stone: new THREE.MeshStandardMaterial({ color: 0x888888 }),
-    default: new THREE.MeshStandardMaterial({ color: 0xffffff }),
-  };
-
-  // create ONE instanced mesh per type (important for colors)
-  const groups = {
-    grass: [],
-    stone: [],
-    default: [],
-  };
+export function createWorld(scene, worldData) {
+  const objects = [];
 
   worldData.forEach((b) => {
-    const type = groups[b.type] ? b.type : "default";
-    groups[type].push(b);
-  });
-
-  const instancedMeshes = [];
-
-  for (const type in groups) {
-    const list = groups[type];
-
-    const mesh = new THREE.InstancedMesh(
-      geometry,
-      materials[type],
-      list.length,
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0x00ff00 }),
     );
 
-    const dummy = new THREE.Object3D();
-
-    list.forEach((b, i) => {
-      dummy.position.set(b.x, b.y, b.z);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-    });
-
-    mesh.userData = { type, count: list.length };
+    mesh.position.set(b.x, b.y, b.z);
+    mesh.userData = { isBlock: true };
 
     scene.add(mesh);
-    instancedMeshes.push(mesh);
-  }
+    objects.push(mesh);
 
-  return instancedMeshes;
+    // physics
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(b.x, b.y, b.z),
+    );
+
+    world.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 0.5, 0.5), body);
+
+    // ✅ store reference
+    mesh.userData.physicsBody = body;
+  });
+
+  return objects;
 }
 
-/* =========================
-   REBUILD WORLD (IMPORTANT)
-   ========================= */
+// ================= REBUILD WORLD =================
 
 export function rebuildWorld(scene, worldData) {
-  // remove old world mesh
-  const old = scene.children.filter((c) => c.userData.isWorld);
+  // ================= REMOVE OLD BLOCKS =================
+  state.objects.forEach((obj) => {
+    // remove mesh
+    scene.remove(obj);
 
-  old.forEach((m) => scene.remove(m));
+    // remove physics body
+    if (obj.userData.physicsBody) {
+      world.removeRigidBody(obj.userData.physicsBody);
+    }
+  });
 
-  // create new instanced world
-  return createWorld(scene, THREE, worldData);
+  state.objects.length = 0;
+
+  // ================= REBUILD BLOCKS =================
+  state.objects = createWorld(scene, worldData);
 }
-
-// scene
-const { scene, camera, renderer, buildPlane } = initScene(THREE);
-
-state.scene = scene;
-state.camera = camera;
-state.renderer = renderer;
-state.buildPlane = buildPlane;
-
-state.objects = createWorld(state.scene, THREE, state.worldData);
-state.enemies = state.singlePlayer ? createEnemies(state.scene, THREE) : [];
-state.controls = setupControls(state.camera, state.isCreatorMode);
-
-state.raycaster = new THREE.Raycaster();
-state.center = new THREE.Vector2(0, 0);
-
-state.preview = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    // wireframe: true,
-    transparent: true,
-    opacity: 0.5,
-  }),
-);
-
-state.preview.visible = false;
-state.scene.add(state.preview);
-
-state.enemies = state.isSinglePlayer ? createEnemies(state.scene, THREE) : [];
-state.controls = setupControls(state.camera, state.isCreatorMode);
-
-state.raycaster = new THREE.Raycaster();
-state.center = new THREE.Vector2(0, 0);
-
-state.pos = new THREE.Vector3();
-
-state.controls = setupControls(state.camera, state.isCreatorMode);

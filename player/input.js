@@ -148,9 +148,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "a") state.move.left = true;
   if (e.key === "d") state.move.right = true;
 
-  if (e.code === "Space" && state.isOnGround) {
-    state.yVelocity = state.jumpForce;
-    state.isOnGround = false;
+  if (e.code === "Space") {
+    state.move.jump = true;
   }
 
   if (state.isSpectating) {

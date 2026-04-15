@@ -1,24 +1,27 @@
 import { gameOver } from "../multiplayer/socket.js";
 import { state } from "../state.js";
 
-state.savedId = localStorage.getItem("playerId");
+state.playerId = localStorage.getItem("playerId");
 
-if (!state.savedId) {
-  if (window.crypto && crypto.randomUUID) {
-    state.savedId = crypto.randomUUID();
-  } else {
-    // fallback UUID generator
-    state.savedId = "xxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-      /[xy]/g,
-      (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      },
-    );
+export function setPlayerId() {
+  if (!state.playerId) {
+    if (window.crypto && crypto.randomUUID) {
+      state.playerId = crypto.randomUUID();
+    } else {
+      // fallback UUID generator
+      state.playerId = "xxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+        /[xy]/g,
+        (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        },
+      );
+    }
   }
 
-  localStorage.setItem("playerId", state.savedId);
+  localStorage.setItem("playerId", state.playerId);
+  return state.playerId;
 }
 
 // ---------------- DAMAGE / DEATH ----------------

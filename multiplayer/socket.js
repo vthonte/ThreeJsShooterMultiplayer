@@ -15,7 +15,11 @@ state.socket = io(
 
 state.socket.on("connect", () => {
   if (!state.isCreatorMode) {
-    state.socket.emit("join", { name: state.playerName, room: state.roomId });
+    state.socket.emit("join", {
+      name: state.playerName,
+      room: state.roomId,
+      playerId: state.playerId,
+    });
   }
 });
 

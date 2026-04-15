@@ -32,6 +32,7 @@ io.on("connection", (socket) => {
 
   socket.on("join", ({ name, room, playerId }) => {
     socket.join(room);
+    console.log(name, room, playerId);
 
     if (!rooms[room]) rooms[room] = {};
 
