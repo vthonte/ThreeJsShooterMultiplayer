@@ -23,6 +23,15 @@ state.socket.on("connect", () => {
   }
 });
 
+state.socket.on("adminUpdate", (adminId) => {
+  state.adminId = adminId;
+
+  // optional helper
+  state.isAdmin = state.playerId === adminId;
+
+  console.log("Admin is:", adminId);
+});
+
 state.socket.on("mapData", (worldData) => {
   let parsedData = [];
 

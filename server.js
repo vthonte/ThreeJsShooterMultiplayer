@@ -1,6 +1,7 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
+import fs from "fs";
 import constants from "./constants.js";
 
 const app = express();
@@ -10,10 +11,19 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
+app.use(express.json());
+
 app.post("/saveWorld", (req, res) => {
   fs.writeFileSync("world.json", JSON.stringify(req.body));
+  res.sendStatus(200);
 });
 
+// rooms structure:
+// rooms[roomId] = {
+//   players: {},
+//   adminId: null,
+//   joinOrder: []
+// }
 const rooms = {};
 const roomMaps = {}; // { roomId: worldData[] }
 
@@ -31,22 +41,39 @@ function findSocketByPlayerId(playerId) {
 io.on("connection", (socket) => {
   const queryPlayerId = socket.handshake.query.playerId;
 
+  // ✅ UPDATE MAP (admin only)
   socket.on("updateMap", ({ room, worldData }) => {
-    if (!room) return;
+    if (!room || !rooms[room]) return;
 
-    console.log("Map updated for room:", room, worldData);
+    const roomData = rooms[room];
+
+    // allow only admin
+    if (socket.playerId !== roomData.adminId) {
+      console.log("Non-admin tried to update map");
+      return;
+    }
+
+    console.log("Map updated for room:", room);
 
     roomMaps[room] = worldData;
 
-    // send to everyone in room
     io.to(room).emit("mapData", worldData);
   });
 
+  // ✅ JOIN ROOM
   socket.on("join", ({ name, room, playerId }) => {
     socket.join(room);
     console.log(name, room, playerId);
 
-    if (!rooms[room]) rooms[room] = {};
+    if (!rooms[room]) {
+      rooms[room] = {
+        players: {},
+        adminId: null,
+        joinOrder: [],
+      };
+    }
+
+    const roomData = rooms[room];
 
     const id = playerId || queryPlayerId || socket.id;
 
@@ -55,8 +82,8 @@ io.on("connection", (socket) => {
 
     let player;
 
-    if (rooms[room][id]) {
-      player = rooms[room][id];
+    if (roomData.players[id]) {
+      player = roomData.players[id];
       player.isOnline = true;
     } else {
       player = {
@@ -71,32 +98,45 @@ io.on("connection", (socket) => {
         isAlive: true,
         isOnline: true,
       };
+
+      roomData.joinOrder.push(id);
     }
 
-    rooms[room][id] = player;
+    roomData.players[id] = player;
 
-    socket.emit("currentPlayers", rooms[room]);
-    io.to(room).emit("scoreUpdate", rooms[room]);
+    // ✅ assign admin if none
+    if (!roomData.adminId) {
+      roomData.adminId = id;
+    }
+
+    // send current state
+    socket.emit("currentPlayers", roomData.players);
+    socket.emit("adminUpdate", roomData.adminId);
+
+    io.to(room).emit("scoreUpdate", roomData.players);
 
     socket.to(room).emit("newPlayer", {
       id,
       ...player,
     });
 
-    // after socket.join(room)
+    // broadcast admin info
+    io.to(room).emit("adminUpdate", roomData.adminId);
 
+    // ✅ send map ONLY to joining player (fixed)
     if (roomMaps[room]) {
-      socket.to(room).emit("mapData", roomMaps[room]);
+      socket.emit("mapData", roomMaps[room]);
     }
   });
 
+  // ✅ PLAYER MOVEMENT
   socket.on("move", (data) => {
     const room = socket.room;
     const id = socket.playerId;
 
-    if (!room || !id) return;
+    if (!room || !id || !rooms[room]) return;
 
-    const player = rooms[room][id];
+    const player = rooms[room].players[id];
     if (!player || !player.isAlive) return;
 
     Object.assign(player, data);
@@ -107,31 +147,33 @@ io.on("connection", (socket) => {
     });
   });
 
+  // ✅ ROOM LIST
   socket.on("getRooms", () => {
-    const roomList = Object.entries(rooms).map(([roomId, players]) => {
+    const roomList = Object.entries(rooms).map(([roomId, roomData]) => {
       return {
         id: roomId,
-        count: Object.values(players).filter((p) => p.isOnline).length,
+        count: Object.values(roomData.players).filter((p) => p.isOnline).length,
       };
     });
 
     socket.emit("roomsList", roomList);
   });
 
+  // ✅ SHOOT PLAYER
   socket.on("shootPlayer", ({ targetId }) => {
     const room = socket.room;
     const shooterId = socket.playerId;
 
-    if (!room || !targetId || targetId === shooterId) return;
+    if (!room || !targetId || targetId === shooterId || !rooms[room]) return;
 
-    const target = rooms[room][targetId];
-    const shooter = rooms[room][shooterId];
+    const roomData = rooms[room];
+    const target = roomData.players[targetId];
+    const shooter = roomData.players[shooterId];
 
     if (!target || !shooter || !target.isAlive) return;
 
     target.health -= 10;
 
-    // ✅ send hit ONLY to target
     const targetSocket = findSocketByPlayerId(targetId);
     if (targetSocket) {
       targetSocket.emit("hit", {
@@ -151,12 +193,12 @@ io.on("connection", (socket) => {
         victim: target.name,
       });
 
-      io.to(room).emit("scoreUpdate", rooms[room]);
+      io.to(room).emit("scoreUpdate", roomData.players);
 
       setTimeout(() => {
-        if (!rooms[room] || !rooms[room][targetId]) return;
+        if (!rooms[room] || !rooms[room].players[targetId]) return;
 
-        const p = rooms[room][targetId];
+        const p = rooms[room].players[targetId];
 
         p.health = 100;
         p.x = 0;
@@ -172,16 +214,41 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ✅ DISCONNECT
   socket.on("disconnect", () => {
     const room = socket.room;
     const id = socket.playerId;
 
     if (!room || !rooms[room] || !id) return;
 
-    const player = rooms[room][id];
+    const roomData = rooms[room];
+    const player = roomData.players[id];
+
     if (player) player.isOnline = false;
 
     socket.to(room).emit("playerDisconnected", id);
+
+    // ✅ if admin left → assign next
+    if (roomData.adminId === id) {
+      const nextAdmin = roomData.joinOrder.find(
+        (pid) => roomData.players[pid]?.isOnline,
+      );
+
+      roomData.adminId = nextAdmin || null;
+
+      io.to(room).emit("adminUpdate", roomData.adminId);
+    }
+
+    // ✅ delete room if empty
+    const anyoneOnline = Object.values(roomData.players).some(
+      (p) => p.isOnline,
+    );
+
+    if (!anyoneOnline) {
+      delete rooms[room];
+      delete roomMaps[room];
+      console.log("Room deleted:", room);
+    }
   });
 });
 
