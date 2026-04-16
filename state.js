@@ -28,4 +28,7 @@ export const state = {
   isGameOver: false,
   isAdmin: false,
   adminId: "",
+  compiledMap: null,
+  compiledBodies: [],
+  objects: [],
 };

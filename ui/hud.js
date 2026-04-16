@@ -1,6 +1,6 @@
 import { getRootObject } from "../player/input.js";
 import { state } from "../state.js";
-import { rebuildWorld } from "../scene.js";
+import { exportMapGLB, rebuildWorld, loadGLBFromFile } from "../scene.js";
 
 state.playerList = document.getElementById("players");
 
@@ -48,9 +48,22 @@ document.getElementById("generateWorldBtn").onclick = () => {
 
   rebuildWorld(state.scene, state.worldData);
 };
+
+document.getElementById("exportMap").onclick = exportMapGLB;
+
 document.getElementById("worldFileInput").addEventListener("change", (e) => {
   const file = e.target.files[0];
-  if (file) loadWorldFromFile(file);
+  if (!file) return;
+
+  if (file.name.endsWith(".json")) {
+    loadWorldFromFile(file);
+  } else if (file.name.endsWith(".glb")) {
+    loadGLBFromFile(file);
+  } else if (file.name.endsWith(".gltf")) {
+    loadGLBFromFile(file); // GLTFLoader supports both
+  } else {
+    console.error("Unsupported file type");
+  }
 });
 
 // ---------------- SHOOT ----------------
@@ -123,21 +136,22 @@ function loadWorldFromFile(file) {
       const data = JSON.parse(e.target.result);
       const newWorld = data.world || [];
 
-      // ✅ update state
+      // ✅ switch to block mode
+      state.mapType = "json";
+      state.isCreatorMode = true;
+
+      // ✅ update data
       state.worldData.length = 0;
       state.worldData.push(...newWorld);
 
-      // ✅ rebuild cleanly
+      // ✅ rebuild
       rebuildWorld(state.scene, state.worldData);
 
-      // ✅ save
-      localStorage.setItem("myWorld", JSON.stringify(state.worldData));
+      // ✅ debug
+      console.log("Blocks loaded:", state.worldData.length);
+      console.log("Meshes created:", state.objects.length);
 
-      console.log(
-        "World loaded successfully:",
-        state.worldData.length,
-        "blocks",
-      );
+      localStorage.setItem("myWorld", JSON.stringify(state.worldData));
     } catch (err) {
       console.error("Failed to load world file:", err);
     }
