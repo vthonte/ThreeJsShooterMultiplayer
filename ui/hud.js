@@ -1,9 +1,9 @@
 import { getRootObject } from "../player/input.js";
 import { state } from "../state.js";
 import {
-  exportMapGLB,
+  exportMapGLTF,
   rebuildWorld,
-  loadGLBFromFile,
+  loadGLTFFromFile,
   loadOBJFromFile,
 } from "../scene.js";
 
@@ -54,7 +54,7 @@ document.getElementById("generateWorldBtn").onclick = () => {
   rebuildWorld(state.scene, state.worldData);
 };
 
-document.getElementById("exportMap").onclick = exportMapGLB;
+document.getElementById("exportMap").onclick = exportMapGLTF;
 
 document.getElementById("worldFileInput").addEventListener("change", (e) => {
   const file = e.target.files[0];
@@ -62,10 +62,8 @@ document.getElementById("worldFileInput").addEventListener("change", (e) => {
 
   if (file.name.endsWith(".json")) {
     loadWorldFromFile(file);
-  } else if (file.name.endsWith(".glb")) {
-    loadGLBFromFile(file);
   } else if (file.name.endsWith(".gltf")) {
-    loadGLBFromFile(file); // GLTFLoader supports both
+    loadGLTFFromFile(file); // GLTFLoader supports both
   } else if (file.name.endsWith(".obj")) {
     loadOBJFromFile(file);
   } else {
@@ -159,6 +157,8 @@ function loadWorldFromFile(file) {
       console.log("Meshes created:", state.objects.length);
 
       localStorage.setItem("myWorld", JSON.stringify(state.worldData));
+
+      exportMapGLTF();
     } catch (err) {
       console.error("Failed to load world file:", err);
     }

@@ -5,6 +5,7 @@ import { world } from "../physics.js";
 
 export function animate() {
   if (!state.isAlive && !state.isSpectating) return;
+  // if (!state.camera) return;
 
   requestAnimationFrame(animate);
 

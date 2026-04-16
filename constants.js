@@ -10,6 +10,7 @@ const constants = {
     height: 2,
     depth: 1,
   },
+  SPAWN_BUFFER_Y: 5,
 };
 
 export default constants;

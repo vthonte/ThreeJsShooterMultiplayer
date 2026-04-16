@@ -4,16 +4,24 @@ import { state } from "./state.js";
 import { setupControls } from "./controls.js";
 import { createEnemies } from "./enemies.js";
 import { createPlayerPhysics } from "./playerPhysics.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/loaders/GLTFLoader.js";
-import * as BufferGeometryUtils from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/utils/BufferGeometryUtils.js";
-import { world } from "./physics.js";
+import { buildPhysicsFromGLTF, world } from "./physics.js";
 import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm";
 import { GLTFExporter } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/exporters/GLTFExporter.js";
 import { OBJLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/loaders/OBJLoader.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/loaders/GLTFLoader.js";
+import * as BufferGeometryUtils from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/utils/BufferGeometryUtils.js";
+import {
+  convertSceneToGLTF,
+  loadGLTFFromArrayBuffer,
+  loadGLTFFromStorage,
+  openDB,
+  saveGLTFToStorage,
+} from "./mapOperations.js";
 
 // ================= INIT SCENE =================
 
-export function initScene() {
+export async function initScene() {
+  await openDB();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
 
@@ -88,10 +96,11 @@ export function initScene() {
   createPlayerPhysics();
 
   // world blocks
-  if (!state.isCreatorMode && state.mapType === "glb") {
-    loadGLBMap(scene);
-  } else {
-    state.objects = createWorld(scene, state.worldData);
+
+  let savedGLTF = await loadGLTFFromStorage();
+
+  if (savedGLTF) {
+    loadGLTFFromArrayBuffer(savedGLTF, scene);
   }
 
   // enemies
@@ -131,7 +140,7 @@ export function createPlayerMesh(id, data) {
   mesh.userData.id = id;
 
   const label = createNameLabel(data.name);
-  label.position.set(0, 2.5, 0);
+  label.position.set(0, 20, 0);
   mesh.add(label);
 
   mesh.position.set(data.x, data.y, data.z);
@@ -154,6 +163,7 @@ export function createNameLabel(name) {
   const texture = new THREE.CanvasTexture(canvas);
 
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+  sprite.userData.isLabel = true;
 
   sprite.scale.set(3, 1, 1);
   return sprite;
@@ -211,11 +221,10 @@ export function removeBlock(mesh) {
 
 // ================= WORLD =================
 
-export function exportMapGLB() {
+export function exportMapGLTF() {
   const exporter = new GLTFExporter();
 
   const geometries = [];
-
   state.scene.traverse((obj) => {
     if (!obj.isMesh) return;
 
@@ -223,7 +232,8 @@ export function exportMapGLB() {
     if (
       obj.userData.isPlayer ||
       obj.userData.isPreview ||
-      obj.userData.isGround
+      obj.userData.isGround ||
+      obj.userData.isLabel
     )
       return;
 
@@ -288,28 +298,19 @@ export function exportMapGLB() {
   exporter.parse(
     exportScene,
     (result) => {
-      console.log("Is ArrayBuffer:", result instanceof ArrayBuffer);
+      const json = JSON.stringify(result, null, 2);
 
-      let blob;
+      const blob = new Blob([json], {
+        type: "application/json",
+      });
 
-      if (result instanceof ArrayBuffer) {
-        console.log("✅ GLB export success");
+      saveGLTFToStorage(json); // STORE STRING (IMPORTANT FIX)
 
-        blob = new Blob([result], {
-          type: "model/gltf-binary",
-        });
-
-        downloadFile(blob, "map.glb");
-      } else {
-        console.error("❌ Still exporting JSON — something is wrong");
-
-        const json = JSON.stringify(result);
-        blob = new Blob([json], { type: "application/json" });
-
-        downloadFile(blob, "debug.gltf");
-      }
+      downloadFile(blob, "map.gltf");
     },
-    { binary: true },
+    {
+      binary: false,
+    },
   );
 
   function downloadFile(blob, name) {
@@ -322,7 +323,7 @@ export function exportMapGLB() {
   }
 }
 
-export function loadGLBFromFile(file) {
+export function loadGLTFFromFile(file) {
   const reader = new FileReader();
 
   reader.onload = async (e) => {
@@ -336,7 +337,7 @@ export function loadGLBFromFile(file) {
         // 🧹 remove old blocks
         rebuildWorld(state.scene, []);
 
-        // 🧹 remove old GLB
+        // 🧹 remove old GLTF
         if (state.compiledMap) {
           state.scene.remove(state.compiledMap);
         }
@@ -345,7 +346,7 @@ export function loadGLBFromFile(file) {
         state.compiledBodies.length = 0;
 
         // ✅ set mode
-        state.mapType = "glb";
+        state.mapType = "gltf";
         state.isCreatorMode = false;
 
         // ✅ add new map
@@ -384,10 +385,12 @@ export function loadGLBFromFile(file) {
           body,
         );
 
-        console.log("GLB map loaded");
+        console.log("GLTF map loaded");
       });
+
+      exportMapGLTF();
     } catch (err) {
-      console.error("Failed to load GLB:", err);
+      console.error("Failed to load GLTF:", err);
     }
   };
 
@@ -404,7 +407,7 @@ export function loadOBJFromFile(file) {
       const loader = new OBJLoader();
       const obj = loader.parse(text);
 
-      // 🧹 CLEAN OLD WORLD
+      // ================= CLEAN OLD WORLD =================
       rebuildWorld(state.scene, []);
 
       if (state.compiledMap) {
@@ -417,7 +420,59 @@ export function loadOBJFromFile(file) {
       state.mapType = "obj";
       state.isCreatorMode = false;
 
-      // ✅ ADD TO SCENE
+      // ================= AUTO DETECTION =================
+
+      const box = new THREE.Box3().setFromObject(obj);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+
+      // -------------------------------
+      // 1. AUTO ORIENTATION DETECTION
+      // -------------------------------
+      // Heuristic:
+      // If model is very tall → likely Y-up → rotate to horizontal
+      // const isVertical = size.y > Math.max(size.x, size.z) * 1.5;
+
+      obj.rotation.x = -Math.PI / 2;
+
+      obj.updateMatrixWorld(true);
+
+      // -------------------------------
+      // 2. AUTO SCALE TO WORLD SIZE
+      // -------------------------------
+      const WORLD_TARGET_SIZE = constants.WORLD_SIZE; // adjust for your game scale
+      const maxSize = Math.max(size.x, size.y, size.z);
+
+      if (maxSize > 0) {
+        const scale = WORLD_TARGET_SIZE / maxSize;
+        obj.scale.setScalar(scale);
+      }
+
+      obj.updateMatrixWorld(true);
+
+      // recompute after scaling
+      box.setFromObject(obj);
+
+      // -------------------------------
+      // 3. CENTER + GROUND SNAP
+      // -------------------------------
+      const newCenter = box.getCenter(new THREE.Vector3());
+
+      obj.position.sub(newCenter);
+
+      // snap to ground (y = 0)
+      // snap to ground (y = 0)
+      box.setFromObject(obj);
+
+      // move model so its lowest point sits at Y = 0
+      obj.position.y -= box.min.y;
+
+      // 🔥 ADD BUFFER SPACE ABOVE GROUND
+      obj.position.y += constants.SPAWN_BUFFER_Y;
+
+      obj.updateMatrixWorld(true);
+
+      // ================= ADD TO SCENE =================
       state.scene.add(obj);
       state.compiledMap = obj;
 
@@ -429,10 +484,9 @@ export function loadOBJFromFile(file) {
 
         let geometry = child.geometry.clone();
 
-        child.updateWorldMatrix(true, false);
+        child.updateMatrixWorld(true);
         geometry.applyMatrix4(child.matrixWorld);
 
-        // ensure indexed
         if (!geometry.index) {
           geometry = BufferGeometryUtils.mergeVertices(geometry);
         }
@@ -447,6 +501,13 @@ export function loadOBJFromFile(file) {
 
       const merged = BufferGeometryUtils.mergeGeometries(geometries);
 
+      if (!merged || !merged.attributes.position) {
+        console.error("Failed to merge geometry");
+        return;
+      }
+
+      merged.computeVertexNormals();
+
       const vertices = new Float32Array(merged.attributes.position.array);
       const indices = new Uint32Array(merged.index.array);
 
@@ -457,61 +518,16 @@ export function loadOBJFromFile(file) {
         RAPIER.ColliderDesc.trimesh(vertices, indices),
         body,
       );
+      // SAVE AS GLTF ALWAYS
+      exportMapGLTF();
 
-      console.log("✅ OBJ map loaded");
+      console.log("✅ Smart OBJ loaded (auto-scale + auto-orientation)");
     } catch (err) {
       console.error("Failed to load OBJ:", err);
     }
   };
 
-  reader.readAsText(file); // OBJ is TEXT, not ArrayBuffer
-}
-
-function loadGLBMap(scene) {
-  const loader = new GLTFLoader();
-
-  loader.load("/map.glb", (gltf) => {
-    // 🧹 remove old blocks
-    rebuildWorld(scene, []);
-
-    // 🧹 remove old GLB
-    if (state.compiledMap) {
-      scene.remove(state.compiledMap);
-    }
-
-    state.compiledBodies.forEach((b) => world.removeRigidBody(b));
-    state.compiledBodies.length = 0;
-
-    // ✅ add new map
-    const map = gltf.scene;
-    scene.add(map);
-    state.compiledMap = map;
-
-    // 🔥 physics
-    map.traverse((child) => {
-      if (!child.isMesh) return;
-
-      let geometry = child.geometry.clone();
-
-      child.updateWorldMatrix(true, false);
-      geometry.applyMatrix4(child.matrixWorld);
-
-      if (!geometry.index) {
-        geometry = BufferGeometryUtils.mergeVertices(geometry);
-      }
-
-      const vertices = geometry.attributes.position.array;
-      const indices = geometry.index.array;
-
-      const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-      state.compiledBodies.push(body);
-
-      world.createCollider(
-        RAPIER.ColliderDesc.trimesh(vertices, indices),
-        body,
-      );
-    });
-  });
+  reader.readAsText(file);
 }
 
 export function createWorld(scene, worldData) {

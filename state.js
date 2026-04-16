@@ -23,7 +23,6 @@ export const state = {
   playerName: "",
   playerId: "",
   roomId: "",
-  jumpForce: 100,
   playerHealth: 100,
   isGameOver: false,
   isAdmin: false,
@@ -31,4 +30,6 @@ export const state = {
   compiledMap: null,
   compiledBodies: [],
   objects: [],
+  jumpForce: 10,
+  scene: {},
 };
