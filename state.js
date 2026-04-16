@@ -23,7 +23,7 @@ export const state = {
   playerName: "",
   playerId: "",
   roomId: "",
-  jumpForce: 10,
+  jumpForce: 100,
   playerHealth: 100,
   isGameOver: false,
   isAdmin: false,

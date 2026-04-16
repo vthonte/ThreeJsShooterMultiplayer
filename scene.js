@@ -9,6 +9,7 @@ import * as BufferGeometryUtils from "https://cdn.jsdelivr.net/npm/three@0.178.0
 import { world } from "./physics.js";
 import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm";
 import { GLTFExporter } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/exporters/GLTFExporter.js";
+import { OBJLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/loaders/OBJLoader.js";
 
 // ================= INIT SCENE =================
 
@@ -391,6 +392,79 @@ export function loadGLBFromFile(file) {
   };
 
   reader.readAsArrayBuffer(file);
+}
+
+export function loadOBJFromFile(file) {
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+
+      const loader = new OBJLoader();
+      const obj = loader.parse(text);
+
+      // 🧹 CLEAN OLD WORLD
+      rebuildWorld(state.scene, []);
+
+      if (state.compiledMap) {
+        state.scene.remove(state.compiledMap);
+      }
+
+      state.compiledBodies.forEach((b) => world.removeRigidBody(b));
+      state.compiledBodies.length = 0;
+
+      state.mapType = "obj";
+      state.isCreatorMode = false;
+
+      // ✅ ADD TO SCENE
+      state.scene.add(obj);
+      state.compiledMap = obj;
+
+      // ================= PHYSICS =================
+      const geometries = [];
+
+      obj.traverse((child) => {
+        if (!child.isMesh) return;
+
+        let geometry = child.geometry.clone();
+
+        child.updateWorldMatrix(true, false);
+        geometry.applyMatrix4(child.matrixWorld);
+
+        // ensure indexed
+        if (!geometry.index) {
+          geometry = BufferGeometryUtils.mergeVertices(geometry);
+        }
+
+        geometries.push(geometry);
+      });
+
+      if (!geometries.length) {
+        console.warn("No geometry found in OBJ");
+        return;
+      }
+
+      const merged = BufferGeometryUtils.mergeGeometries(geometries);
+
+      const vertices = new Float32Array(merged.attributes.position.array);
+      const indices = new Uint32Array(merged.index.array);
+
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+      state.compiledBodies.push(body);
+
+      world.createCollider(
+        RAPIER.ColliderDesc.trimesh(vertices, indices),
+        body,
+      );
+
+      console.log("✅ OBJ map loaded");
+    } catch (err) {
+      console.error("Failed to load OBJ:", err);
+    }
+  };
+
+  reader.readAsText(file); // OBJ is TEXT, not ArrayBuffer
 }
 
 function loadGLBMap(scene) {

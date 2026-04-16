@@ -1,6 +1,11 @@
 import { getRootObject } from "../player/input.js";
 import { state } from "../state.js";
-import { exportMapGLB, rebuildWorld, loadGLBFromFile } from "../scene.js";
+import {
+  exportMapGLB,
+  rebuildWorld,
+  loadGLBFromFile,
+  loadOBJFromFile,
+} from "../scene.js";
 
 state.playerList = document.getElementById("players");
 
@@ -61,6 +66,8 @@ document.getElementById("worldFileInput").addEventListener("change", (e) => {
     loadGLBFromFile(file);
   } else if (file.name.endsWith(".gltf")) {
     loadGLBFromFile(file); // GLTFLoader supports both
+  } else if (file.name.endsWith(".obj")) {
+    loadOBJFromFile(file);
   } else {
     console.error("Unsupported file type");
   }
