@@ -145,7 +145,7 @@ export function createPlayerMesh(id, data) {
   mesh.userData.id = id;
 
   const label = createNameLabel(data.name);
-  label.position.set(0, 20, 0);
+  label.position.set(0, 2, 0);
   mesh.add(label);
 
   mesh.position.set(data.x, data.y, data.z);
@@ -329,6 +329,87 @@ export function exportMapGLTF() {
     a.download = name;
     a.click();
   }
+}
+
+export function loadGLBFromFile(file) {
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const arrayBuffer = e.target.result;
+
+      const loader = new GLTFLoader();
+
+      loader.parse(
+        arrayBuffer,
+        "", // no path needed (GLB is self-contained)
+        (gltf) => {
+          console.log("✅ GLB loaded");
+
+          // 🔥 clear old world
+          rebuildWorld(state.scene, []);
+
+          // remove old compiled map if exists
+          if (state.compiledMap) {
+            state.scene.remove(state.compiledMap);
+          }
+
+          const model = gltf.scene;
+
+          model.traverse((child) => {
+            if (!child.isMesh) return;
+
+            const mat = child.material;
+
+            if (mat) {
+              mat.transparent = false;
+              mat.opacity = 1;
+              mat.depthWrite = true;
+            }
+          });
+
+          // 🔥 FIX ORIENTATION
+          // model.rotation.x = -Math.PI; // most common fix
+
+          // OPTIONAL: if still wrong, try these:
+          // model.rotation.x = Math.PI / 2;
+          // model.rotation.z = Math.PI;
+          // model.rotation.y = Math.PI;
+
+          // 🔥 CENTER + GROUND SNAP (recommended)
+          const box = new THREE.Box3().setFromObject(model);
+          const center = box.getCenter(new THREE.Vector3());
+
+          model.position.sub(center); // center it
+
+          // snap to ground
+          box.setFromObject(model);
+          model.position.y -= box.min.y;
+
+          state.compiledMap = model;
+          state.scene.add(model);
+
+          // 🔥 OPTIONAL: store it (convert to JSON if needed)
+          const exporter = new GLTFExporter();
+          exporter.parse(
+            gltf.scene,
+            (result) => {
+              const json = JSON.stringify(result);
+              saveGLTFToStorage(json);
+            },
+            { binary: false },
+          );
+        },
+        (err) => {
+          console.error("❌ Failed to parse GLB:", err);
+        },
+      );
+    } catch (err) {
+      console.error("❌ Error reading GLB:", err);
+    }
+  };
+
+  reader.readAsArrayBuffer(file); // 🔥 IMPORTANT
 }
 
 export function loadGLTFFromFile(file) {

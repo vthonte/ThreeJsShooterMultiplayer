@@ -30,6 +30,6 @@ export const state = {
   compiledMap: null,
   compiledBodies: [],
   objects: [],
-  jumpForce: 10,
+  jumpForce: 15,
   scene: {},
 };

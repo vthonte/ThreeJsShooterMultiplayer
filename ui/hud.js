@@ -5,6 +5,7 @@ import {
   rebuildWorld,
   loadGLTFFromFile,
   loadOBJFromFile,
+  loadGLBFromFile,
 } from "../scene.js";
 import { getGLTFFromStorage } from "../mapOperations.js";
 
@@ -73,6 +74,8 @@ document.getElementById("worldFileInput").addEventListener("change", (e) => {
 
   if (file.name.endsWith(".json")) {
     loadWorldFromFile(file);
+  } else if (file.name.endsWith(".glb")) {
+    loadGLBFromFile(file); // GLTFLoader supports both
   } else if (file.name.endsWith(".gltf")) {
     loadGLTFFromFile(file); // GLTFLoader supports both
   } else if (file.name.endsWith(".obj")) {
