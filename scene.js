@@ -368,21 +368,23 @@ export function loadGLBFromFile(file) {
             }
           });
 
-          // 🔥 FIX ORIENTATION
-          // model.rotation.x = -Math.PI; // most common fix
-
-          // OPTIONAL: if still wrong, try these:
-          // model.rotation.x = Math.PI / 2;
-          // model.rotation.z = Math.PI;
-          // model.rotation.y = Math.PI;
-
-          // 🔥 CENTER + GROUND SNAP (recommended)
+          // ================= SCALE =================
           const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+
+          const maxDim = Math.max(size.x, size.y, size.z);
+
+          if (maxDim > 0) {
+            const scale = (constants.WORLD_SIZE * 2) / maxDim;
+            model.scale.setScalar(scale);
+          }
+
+          // ================= CENTER =================
+          box.setFromObject(model);
           const center = box.getCenter(new THREE.Vector3());
+          model.position.sub(center);
 
-          model.position.sub(center); // center it
-
-          // snap to ground
+          // ================= GROUND SNAP =================
           box.setFromObject(model);
           model.position.y -= box.min.y;
 
