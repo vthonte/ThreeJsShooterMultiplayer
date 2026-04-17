@@ -152,6 +152,13 @@ document.addEventListener("keydown", (e) => {
     state.move.jump = true;
   }
 
+  // ✅ ADD THIS
+  if (!state.isCreatorMode) {
+    if (e.key.toLowerCase() === constants.FIRE_BUTTON) {
+      shoot();
+    }
+  }
+
   if (state.isSpectating) {
     const list = Object.values(otherPlayers);
 

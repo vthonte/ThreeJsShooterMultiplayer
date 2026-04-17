@@ -11,6 +11,7 @@ const constants = {
     depth: 1,
   },
   SPAWN_BUFFER_Y: 5,
+  FIRE_BUTTON: "k",
 };
 
 export default constants;
