@@ -15,7 +15,7 @@ export const state = {
   camera: "",
   worldData: [],
   // yVelocity: 0,
-  gravity: 9.81,
+  gravity: 11,
   isSinglePlayer: false,
   enemies: [],
   move: { forward: false, back: false, left: false, right: false, jump: true },

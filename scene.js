@@ -311,6 +311,8 @@ export function exportMapGLTF() {
 
       saveGLTFToStorage(json); // STORE STRING (IMPORTANT FIX)
 
+      downloadFile(blob, "map.gltf");
+
       // state.socket.emit("updateMap", {
       //   room: state.roomId,
       //   map: json,
@@ -375,7 +377,7 @@ export function loadGLBFromFile(file) {
           const maxDim = Math.max(size.x, size.y, size.z);
 
           if (maxDim > 0) {
-            const scale = (constants.WORLD_SIZE * 2) / maxDim;
+            const scale = constants.WORLD_SIZE / maxDim;
             model.scale.setScalar(scale);
           }
 

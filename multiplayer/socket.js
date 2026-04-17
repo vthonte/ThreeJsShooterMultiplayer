@@ -93,7 +93,7 @@ state.socket.on("playerRespawn", (player) => {
     if (healthBar) healthBar.style.width = "100%";
     if (healthText) healthText.innerText = "100";
 
-    animate();
+    // animate();
   } else {
     if (state.otherPlayers[player.id]) {
       state.scene.remove(state.otherPlayers[player.id]);

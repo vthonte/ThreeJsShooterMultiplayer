@@ -4,7 +4,7 @@ import { state } from "../state.js";
 
 export function createPlayerPhysics() {
   const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
-    .setTranslation(0, 5, 0)
+    .setTranslation(0, 50, 0)
     .setLinearDamping(0.9);
 
   const body = world.createRigidBody(bodyDesc);
