@@ -3,7 +3,13 @@ import { state } from "../state.js";
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js";
 import { world } from "../physics.js";
 
+import Stats from "https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js";
+
+const stats = new Stats();
+document.body.appendChild(stats.dom);
+
 export function animate() {
+  stats.begin();
   if (!state.isAlive && !state.isSpectating) return;
   // if (!state.camera) return;
 
@@ -32,6 +38,8 @@ export function animate() {
     }
 
     state.renderer.render(state.scene, state.camera);
+
+    stats.end();
     return;
   }
 
@@ -106,4 +114,6 @@ export function animate() {
 
   // ================= RENDER =================
   state.renderer.render(state.scene, state.camera);
+
+  stats.end();
 }

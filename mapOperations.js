@@ -2,8 +2,10 @@ import { GLTFExporter } from "https://cdn.jsdelivr.net/npm/three@0.178.0/example
 import { OBJLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/loaders/OBJLoader.js";
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/loaders/GLTFLoader.js";
 import * as BufferGeometryUtils from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/utils/BufferGeometryUtils.js";
+import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm";
 import { state } from "./state.js";
 import { world } from "./physics.js";
+import { rebuildWorld } from "./scene.js";
 
 const DB_NAME = "mapDB";
 const DB_VERSION = 1;
@@ -104,23 +106,52 @@ function buildPhysicsFromGLTF(map) {
   state.compiledBodies.forEach((b) => world.removeRigidBody(b));
   state.compiledBodies.length = 0;
 
+  const geometries = [];
+
   map.traverse((child) => {
-    if (!child.geometry) return;
-    if (!child.geometry.attributes.position) return;
     if (!child.isMesh) return;
 
-    const geo = child.geometry.clone();
+    let geo = child.geometry.clone();
+
     child.updateWorldMatrix(true, false);
     geo.applyMatrix4(child.matrixWorld);
 
-    const vertices = geo.attributes.position.array;
-    const indices = geo.index ? geo.index.array : undefined;
+    // ✅ FIX 1: ensure indexed
+    if (!geo.index) {
+      geo = BufferGeometryUtils.mergeVertices(geo);
+    }
 
-    const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-    state.compiledBodies.push(body);
-
-    world.createCollider(RAPIER.ColliderDesc.trimesh(vertices, indices), body);
+    geometries.push(geo);
   });
+
+  if (!geometries.length) {
+    console.warn("No geometry for physics");
+    return;
+  }
+
+  // ✅ FIX 2: merge all
+  const merged = BufferGeometryUtils.mergeGeometries(geometries);
+
+  if (!merged || !merged.attributes.position) {
+    console.error("Physics merge failed");
+    return;
+  }
+
+  // ✅ FIX 3: ensure index exists
+  if (!merged.index) {
+    console.error("Merged geometry has no index");
+    return;
+  }
+
+  const vertices = new Float32Array(merged.attributes.position.array);
+  const indices = new Uint32Array(merged.index.array);
+
+  const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+  state.compiledBodies.push(body);
+
+  world.createCollider(RAPIER.ColliderDesc.trimesh(vertices, indices), body);
+
+  console.log("✅ Physics rebuilt (merged)");
 }
 
 export function resetWorld(scene) {

@@ -11,7 +11,7 @@ import { generatePlayerId } from "./utils/generatePlayerId.js";
 state.roomId = localStorage.getItem("roomId") || "default";
 state.isCreatorMode = localStorage.getItem("mode") === "creator";
 state.playerName = localStorage.getItem("playerName") || "Player";
-state.worldData = JSON.parse(localStorage.getItem("myWorld")) || [];
+// state.worldData = JSON.parse(localStorage.getItem("myWorld")) || [];
 state.playerId =
   localStorage.getItem("playerId") ||
   localStorage.setItem("playerId", generatePlayerId()) ||

@@ -278,7 +278,7 @@ export function exportMapGLTF() {
   }
 
   // 🔥 CRITICAL FIX: REMOVE INDEX COMPLETELY
-  mergedGeometry = mergedGeometry.toNonIndexed();
+  // mergedGeometry = mergedGeometry.toNonIndexed();
 
   console.log("vertex count:", mergedGeometry.attributes.position.count);
 
