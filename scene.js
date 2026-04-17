@@ -144,9 +144,11 @@ export function createPlayerMesh(id, data) {
   mesh.userData.isPlayer = true;
   mesh.userData.id = id;
 
-  const label = createNameLabel(data.name);
-  label.position.set(0, 2, 0);
-  mesh.add(label);
+  if (constants.IS_PLAYER_LABEL_ON) {
+    const label = createNameLabel(data.name);
+    label.position.set(0, 2, 0);
+    mesh.add(label);
+  }
 
   mesh.position.set(data.x, data.y, data.z);
 

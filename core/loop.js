@@ -4,6 +4,7 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.m
 import { world } from "../physics.js";
 
 import Stats from "https://cdnjs.cloudflare.com/ajax/libs/stats.js/r17/Stats.min.js";
+import constants from "../constants.js";
 
 const stats = new Stats();
 document.body.appendChild(stats.dom);
@@ -80,7 +81,7 @@ export function animate() {
 
     // ================= CAMERA SYNC =================
     const pos = body.translation();
-    state.camera.position.set(pos.x, pos.y + 1, pos.z);
+    state.camera.position.set(pos.x, pos.y + constants.EYE_HEIGHT, pos.z);
   }
 
   // ================= MULTIPLAYER =================
@@ -90,7 +91,6 @@ export function animate() {
       y: state.camera.position.y,
       z: state.camera.position.z,
     });
-
   // ================= ENEMIES =================
   state.enemies.forEach((enemy) => {
     const dir = new THREE.Vector3()

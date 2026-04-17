@@ -12,6 +12,9 @@ const constants = {
   },
   SPAWN_BUFFER_Y: 5,
   FIRE_BUTTON: "k",
+  EYE_HEIGHT: 0,
+  IS_PLAYER_LABEL_ON: false,
+  PLAYER_POSITION_OFFSET: 0,
 };
 
 export default constants;
