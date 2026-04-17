@@ -1,7 +1,6 @@
 import { state } from "./state.js";
 import "./ui/hud.js";
 import "./player/playerDetails.js";
-import "./multiplayer/socket.js";
 import "./player/input.js";
 import { animate } from "./core/loop.js";
 import { initPhysics } from "./physics.js";
@@ -22,6 +21,8 @@ await initPhysics();
 
 // ✅ STEP 2: THEN init scene (safe now)
 initScene();
+
+import "./multiplayer/socket.js";
 
 // ✅ STEP 3: start loop
 animate();

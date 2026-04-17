@@ -84,11 +84,12 @@ export function animate() {
   }
 
   // ================= MULTIPLAYER =================
-  state.socket.emit("move", {
-    x: state.camera.position.x,
-    y: state.camera.position.y,
-    z: state.camera.position.z,
-  });
+  if (state.camera)
+    state.socket.emit("move", {
+      x: state.camera.position.x,
+      y: state.camera.position.y,
+      z: state.camera.position.z,
+    });
 
   // ================= ENEMIES =================
   state.enemies.forEach((enemy) => {
@@ -113,7 +114,7 @@ export function animate() {
   });
 
   // ================= RENDER =================
-  state.renderer.render(state.scene, state.camera);
+  if (state.renderer?.render) state.renderer.render(state.scene, state.camera);
 
   stats.end();
 }

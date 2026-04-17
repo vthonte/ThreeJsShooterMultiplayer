@@ -29,37 +29,37 @@ export function openDB() {
   });
 }
 
-export function convertSceneToGLTF(scene) {
-  const exporter = new GLTFExporter();
+// export function convertSceneToGLTF(scene) {
+//   const exporter = new GLTFExporter();
 
-  exporter.parse(
-    scene,
-    (result) => {
-      if (result instanceof ArrayBuffer) {
-        saveGLTFToStorage(result);
-      }
-    },
-    { binary: true },
-  );
-}
+//   exporter.parse(
+//     scene,
+//     (result) => {
+//       if (result instanceof ArrayBuffer) {
+//         saveGLTFToStorage(result);
+//       }
+//     },
+//     { binary: true },
+//   );
+// }
 
-export function restoreMapFromStorage(scene) {
-  const data = localStorage.getItem("map_gltf");
-  if (!data) return;
+// export function restoreMapFromStorage(scene) {
+//   const data = localStorage.getItem("map_gltf");
+//   if (!data) return;
 
-  fetch(data)
-    .then((res) => res.arrayBuffer())
-    .then((buffer) => {
-      const loader = new GLTFLoader();
+//   fetch(data)
+//     .then((res) => res.arrayBuffer())
+//     .then((buffer) => {
+//       const loader = new GLTFLoader();
 
-      loader.parse(buffer, "", (gltf) => {
-        scene.add(gltf.scene);
-        state.compiledMap = gltf.scene;
+//       loader.parse(buffer, "", (gltf) => {
+//         scene.add(gltf.scene);
+//         state.compiledMap = gltf.scene;
 
-        rebuildGLTFPhysics(gltf.scene);
-      });
-    });
-}
+//         rebuildGLTFPhysics(gltf.scene);
+//       });
+//     });
+// }
 
 export async function saveGLTFToStorage(gltfString) {
   const db = await openDB();
@@ -68,6 +68,25 @@ export async function saveGLTFToStorage(gltfString) {
   const store = tx.objectStore("maps");
 
   store.put(gltfString, "main");
+}
+
+export async function getGLTFFromStorage() {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("maps", "readonly");
+    const store = tx.objectStore("maps");
+
+    const request = store.get("main");
+
+    request.onsuccess = () => {
+      resolve(request.result || null); // returns your saved gltfString
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
 }
 
 export async function loadGLTFFromStorage() {
@@ -84,22 +103,32 @@ export async function loadGLTFFromStorage() {
   });
 }
 
-export function loadGLTFFromArrayBuffer(buffer, scene) {
+export function loadGLTFFromJSON(jsonString, scene, onDone) {
   const loader = new GLTFLoader();
 
-  loader.parse(buffer, "", (gltf) => {
-    rebuildWorld(scene, []);
+  try {
+    const parsed = JSON.parse(jsonString);
 
-    if (state.compiledMap) {
-      scene.remove(state.compiledMap);
-    }
+    loader.parse(JSON.stringify(parsed), "", (gltf) => {
+      rebuildWorld(scene, []);
 
-    const map = gltf.scene;
-    scene.add(map);
-    state.compiledMap = map;
+      if (state.compiledMap) {
+        scene.remove(state.compiledMap);
+      }
 
-    buildPhysicsFromGLTF(map);
-  });
+      const map = gltf.scene;
+      scene.add(map);
+      state.compiledMap = map;
+
+      buildPhysicsFromGLTF(map);
+
+      console.log("✅ GLTF JSON loaded properly");
+
+      onDone && onDone(); // ✅ important
+    });
+  } catch (e) {
+    console.error("Invalid GLTF JSON:", e);
+  }
 }
 
 function buildPhysicsFromGLTF(map) {
@@ -139,8 +168,7 @@ function buildPhysicsFromGLTF(map) {
 
   // ✅ FIX 3: ensure index exists
   if (!merged.index) {
-    console.error("Merged geometry has no index");
-    return;
+    merged = BufferGeometryUtils.mergeVertices(merged);
   }
 
   const vertices = new Float32Array(merged.attributes.position.array);

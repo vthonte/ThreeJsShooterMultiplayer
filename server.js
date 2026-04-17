@@ -9,6 +9,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: { origin: "*" },
+  maxHttpBufferSize: 1e8, // 🔥 100 MB
 });
 
 app.use(express.json());
@@ -42,22 +43,16 @@ io.on("connection", (socket) => {
   const queryPlayerId = socket.handshake.query.playerId;
 
   // ✅ UPDATE MAP (admin only)
-  socket.on("updateMap", ({ room, worldData }) => {
+  socket.on("updateMap", ({ room, map }) => {
+    console.log(`Update Map: ${room} ${map}`);
     if (!room || !rooms[room]) return;
 
-    const roomData = rooms[room];
+    if (socket.playerId !== rooms[room].adminId) return;
 
-    // allow only admin
-    if (socket.playerId !== roomData.adminId) {
-      console.log("Non-admin tried to update map");
-      return;
-    }
+    roomMaps[room] = map;
+    console.log(`updating room: ${map}`);
 
-    console.log("Map updated for room:", room);
-
-    roomMaps[room] = worldData;
-
-    io.to(room).emit("mapData", worldData);
+    io.to(room).emit("mapData", map);
   });
 
   // ✅ JOIN ROOM
@@ -125,6 +120,7 @@ io.on("connection", (socket) => {
 
     // ✅ send map ONLY to joining player (fixed)
     if (roomMaps[room]) {
+      console.log("emitting map:", roomMaps[room]);
       socket.emit("mapData", roomMaps[room]);
     }
   });
@@ -245,9 +241,9 @@ io.on("connection", (socket) => {
     );
 
     if (!anyoneOnline) {
-      delete rooms[room];
-      delete roomMaps[room];
-      console.log("Room deleted:", room);
+      // delete rooms[room];
+      // delete roomMaps[room];
+      // console.log("Room deleted:", room);
     }
   });
 });

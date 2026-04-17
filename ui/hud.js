@@ -6,6 +6,7 @@ import {
   loadGLTFFromFile,
   loadOBJFromFile,
 } from "../scene.js";
+import { getGLTFFromStorage } from "../mapOperations.js";
 
 state.playerList = document.getElementById("players");
 
@@ -15,14 +16,24 @@ document.getElementById("colorPicker").addEventListener("input", (e) => {
   state.selectedColor = parseInt(e.target.value.replace("#", "0x"));
 });
 
-document.getElementById("publishMap").onclick = () => {
+document.getElementById("publishMap").onclick = async () => {
   console.log(JSON.stringify(state.worldData));
-  state.socket.emit("updateMap", {
-    room: state.roomId,
-    worldData: state.worldData.length
-      ? state.worldData
-      : localStorage.getItem("myWorld"),
-  });
+
+  if (state.isCreatorMode) {
+    state.socket.emit("updateMap", {
+      room: state.roomId,
+      worldData: state.worldData.length
+        ? state.worldData
+        : localStorage.getItem("myWorld"),
+    });
+  } else {
+    let storedMap = await getGLTFFromStorage();
+    console.log("socket connected?", state.socket.connected);
+    state.socket.emit("updateMap", {
+      room: state.roomId,
+      map: storedMap,
+    });
+  }
 };
 
 document.getElementById("creatorBtn").onclick = () => {
@@ -80,16 +91,19 @@ if (!state.isCreatorMode) {
 export function shoot() {
   if (!state.isAlive || state.isCreatorMode) return;
 
-  state.raycaster.setFromCamera(state.center, state.camera);
+  state.raycaster?.setFromCamera(state.center, state.camera);
 
   const playerMeshes = Object.values(state.otherPlayers);
 
-  const intersects = state.raycaster.intersectObjects(
-    [...state.enemies, ...playerMeshes, ...state.objects], // 👈 include blocks
-    true,
-  );
+  let intersects;
+  if (state.raycaster) {
+    intersects = state.raycaster.intersectObjects(
+      [...state.enemies, ...playerMeshes, ...state.objects], // 👈 include blocks
+      true,
+    );
+  }
 
-  if (intersects.length > 0) {
+  if (intersects && intersects.length > 0) {
     const hit = getRootObject(intersects[0].object);
 
     // 🧱 CREATOR MODE: remove block

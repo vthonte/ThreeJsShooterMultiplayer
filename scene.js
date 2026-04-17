@@ -11,8 +11,7 @@ import { OBJLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/j
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/loaders/GLTFLoader.js";
 import * as BufferGeometryUtils from "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/utils/BufferGeometryUtils.js";
 import {
-  convertSceneToGLTF,
-  loadGLTFFromArrayBuffer,
+  loadGLTFFromJSON,
   loadGLTFFromStorage,
   openDB,
   saveGLTFToStorage,
@@ -100,7 +99,9 @@ export async function initScene() {
   let savedGLTF = await loadGLTFFromStorage();
 
   if (savedGLTF) {
-    loadGLTFFromArrayBuffer(savedGLTF, scene);
+    await new Promise((resolve) => {
+      loadGLTFFromJSON(savedGLTF, scene, resolve);
+    });
   }
 
   // enemies
@@ -131,6 +132,10 @@ export async function initScene() {
 // ================= PLAYER =================
 
 export function createPlayerMesh(id, data) {
+  if (!state.scene || !state.scene.add) {
+    console.warn("Scene not ready");
+    return;
+  }
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(1, 2, 1),
     new THREE.MeshStandardMaterial({ color: data.color }),
@@ -306,7 +311,10 @@ export function exportMapGLTF() {
 
       saveGLTFToStorage(json); // STORE STRING (IMPORTANT FIX)
 
-      downloadFile(blob, "map.gltf");
+      // state.socket.emit("updateMap", {
+      //   room: state.roomId,
+      //   map: json,
+      // });
     },
     {
       binary: false,
@@ -326,75 +334,28 @@ export function exportMapGLTF() {
 export function loadGLTFFromFile(file) {
   const reader = new FileReader();
 
-  reader.onload = async (e) => {
+  reader.onload = (e) => {
     try {
-      const arrayBuffer = e.target.result;
+      const text = e.target.result;
 
-      const loader = new GLTFLoader();
+      // ✅ Try parsing as JSON
+      const json = JSON.parse(text);
 
-      loader.parse(arrayBuffer, "", (gltf) => {
-        // 🧹 clear existing world
-        // 🧹 remove old blocks
-        rebuildWorld(state.scene, []);
+      console.log("✅ Parsed JSON:", json);
 
-        // 🧹 remove old GLTF
-        if (state.compiledMap) {
-          state.scene.remove(state.compiledMap);
-        }
+      // ✅ Store JSON string
+      saveGLTFToStorage(JSON.stringify(json));
 
-        state.compiledBodies.forEach((b) => world.removeRigidBody(b));
-        state.compiledBodies.length = 0;
-
-        // ✅ set mode
-        state.mapType = "gltf";
-        state.isCreatorMode = false;
-
-        // ✅ add new map
-        const map = gltf.scene;
-        state.scene.add(map);
-        state.compiledMap = map;
-
-        // 🔥 build physics
-        const geometries = [];
-
-        map.traverse((child) => {
-          if (!child.isMesh) return;
-
-          let geometry = child.geometry.clone();
-
-          child.updateWorldMatrix(true, false);
-          geometry.applyMatrix4(child.matrixWorld);
-
-          if (!geometry.index) {
-            geometry = BufferGeometryUtils.mergeVertices(geometry);
-          }
-
-          geometries.push(geometry);
-        });
-
-        const merged = BufferGeometryUtils.mergeGeometries(geometries);
-
-        const vertices = new Float32Array(merged.attributes.position.array);
-        const indices = new Uint32Array(merged.index.array);
-
-        const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-        state.compiledBodies.push(body);
-
-        world.createCollider(
-          RAPIER.ColliderDesc.trimesh(vertices, indices),
-          body,
-        );
-
-        console.log("GLTF map loaded");
+      // ✅ Load using JSON path
+      loadGLTFFromJSON(JSON.stringify(json), state.scene, () => {
+        console.log("✅ Loaded via JSON pipeline");
       });
-
-      exportMapGLTF();
     } catch (err) {
-      console.error("Failed to load GLTF:", err);
+      console.error("❌ Not valid JSON GLTF (probably .glb binary):", err);
     }
   };
 
-  reader.readAsArrayBuffer(file);
+  reader.readAsText(file); // 🔥 IMPORTANT: read as TEXT
 }
 
 export function loadOBJFromFile(file) {
